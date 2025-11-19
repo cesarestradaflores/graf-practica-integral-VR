@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------
-// --- Game.js (Controlador Principal) - CON VR
+// --- Game.js (VR PRIMERA PERSONA - CÁMARA EN JUGADOR)
 // -----------------------------------------------------------------
 
 import * as THREE from 'three';
@@ -30,9 +30,10 @@ export class Game {
         this.obstacleManager = null;
         this.assets = {};
 
-        // NUEVO: Configuración VR
+        // Configuración VR MEJORADA
         this.isVRMode = false;
         this.vrControls = null;
+        this.cameraContainer = new THREE.Group(); // NUEVO: Contenedor para cámara en VR
 
         this.audioListener = null;
         this.backgroundMusic = null;
@@ -48,7 +49,7 @@ export class Game {
         this.distance = 0;
         this.difficultyLevel = 1;
 
-        // SISTEMA DE POWER-UPS - 15 SEGUNDOS CORREGIDO
+        // SISTEMA DE POWER-UPS
         this.activePowerUps = {
             magnet: { active: false, timer: 0 },
             double: { active: false, timer: 0 }
@@ -67,7 +68,6 @@ export class Game {
             rulesModal: document.getElementById('rules-modal')
         };
 
-        // Elementos UI para power-ups
         this.powerUpIndicators = {
             magnet: document.createElement('div'),
             double: document.createElement('div')
@@ -81,12 +81,12 @@ export class Game {
     }
 
     async init() {
-        console.log("Iniciando el juego...");
+        console.log("Iniciando el juego con VR primera persona...");
 
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
 
-        // NUEVO: Configuración WebXR
+        // NUEVO: Configuración WebXR MEJORADA
         this.setupWebXR();
 
         this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -97,11 +97,16 @@ export class Game {
         this.renderer.outputEncoding = THREE.sRGBEncoding;
         document.body.appendChild(this.renderer.domElement);
 
+        // NUEVO: Configurar contenedor de cámara para VR
+        this.setupCameraContainer();
+
         this.setupAudio();
 
         this.scene.fog = new THREE.Fog(Config.FOG_COLOR, Config.FOG_NEAR, Config.FOG_FAR);
-        this.camera.position.set(0, Config.CAMERA_START_Y, Config.CAMERA_START_Z);
-        this.camera.lookAt(0, 0, 0);
+        
+        // POSICIÓN INICIAL MEJORADA - Permite ver zombie atrás
+        this.cameraContainer.position.set(0, Config.VR_SETTINGS.PLAYER_HEIGHT, 0);
+        this.camera.position.set(0, 0, 0); // Cámara dentro del contenedor
 
         try {
             this.assets = await this.preloadAssets();
@@ -128,12 +133,19 @@ export class Game {
         window.addEventListener('resize', this.onWindowResize.bind(this), false);
         document.addEventListener('keydown', this.player.onKeyDown.bind(this.player), false);
 
-        console.log("Iniciación completa. Esperando que el jugador presione 'Jugar'.");
+        console.log("Iniciación completa. VR primera persona configurada.");
         
         return Promise.resolve();
     }
 
-    // NUEVO MÉTODO: Configuración WebXR
+    // NUEVO: Configurar contenedor de cámara para VR
+    setupCameraContainer() {
+        this.scene.add(this.cameraContainer);
+        this.cameraContainer.add(this.camera);
+        console.log("✅ Contenedor de cámara VR configurado");
+    }
+
+    // NUEVO MÉTODO: Configuración WebXR MEJORADA
     setupWebXR() {
         this.renderer.xr.enabled = true;
         
@@ -141,7 +153,7 @@ export class Game {
         document.body.appendChild(vrButton);
         
         this.renderer.xr.addEventListener('sessionstart', () => {
-            console.log('🚀 Sesión VR iniciada');
+            console.log('🚀 Sesión VR iniciada - Primera persona activada');
             this.onVRStart();
         });
         
@@ -150,42 +162,58 @@ export class Game {
             this.onVREnd();
         });
         
-        console.log("✅ WebXR configurado - Botón VR añadido");
+        console.log("✅ WebXR configurado - Primera persona inmersiva");
     }
 
-    // NUEVO: Configurar controles VR
+    // NUEVO: Configurar controles VR MEJORADOS
     setupVRControls() {
         if (this.renderer.xr.enabled && this.player) {
-            this.vrControls = new VRControls(this.camera, this.renderer, this.player, this.scene);
-            console.log("✅ Controles VR configurados");
+            this.vrControls = new VRControls(this.camera, this.renderer, this.player, this.scene, this.cameraContainer);
+            console.log("✅ Controles VR primera persona configurados");
         }
     }
 
-    // NUEVO: Cuando inicia sesión VR
+    // NUEVO: Cuando inicia sesión VR - PRIMERA PERSONA
     onVRStart() {
         this.isVRMode = true;
+        this.player.enableVRMode();
         
-        // Ajustar cámara para VR (altura de persona)
-        this.camera.position.set(0, 1.6, 0);
+        // OCULTAR MODELO DEL JUGADOR EN VR (eres tú mismo)
+        if (this.player.group) {
+            this.player.group.visible = false;
+        }
+        
+        // Posicionar contenedor de cámara en el jugador
+        this.cameraContainer.position.set(
+            this.player.group.position.x,
+            Config.VR_SETTINGS.PLAYER_HEIGHT,
+            this.player.group.position.z
+        );
         
         // Disparar evento personalizado para la UI
         window.dispatchEvent(new CustomEvent('game-vr-start'));
         
-        console.log("🎮 Modo VR activado");
+        console.log("🎮 Modo VR primera persona activado - Eres el personaje");
     }
 
     // NUEVO: Cuando termina sesión VR
     onVREnd() {
         this.isVRMode = false;
+        this.player.disableVRMode();
+        
+        // MOSTRAR MODELO DEL JUGADOR en modo normal
+        if (this.player.group) {
+            this.player.group.visible = true;
+        }
         
         // Restaurar cámara normal
-        this.camera.position.set(0, Config.CAMERA_START_Y, Config.CAMERA_START_Z);
-        this.camera.lookAt(0, 0, 0);
+        this.cameraContainer.position.set(0, Config.CAMERA_START_Y, Config.CAMERA_START_Z);
+        this.cameraContainer.lookAt(0, 0, 0);
         
         // Disparar evento personalizado para la UI
         window.dispatchEvent(new CustomEvent('game-vr-end'));
         
-        console.log("🖥️ Modo VR desactivado - Volviendo a modo normal");
+        console.log("🖥️ Modo VR desactivado - Volviendo a tercera persona");
     }
 
     setupAudio() {
@@ -331,7 +359,6 @@ export class Game {
         console.log(`❌ Power-up DESACTIVADO: ${type}`);
     }
 
-    // NUEVO: Método para debug de power-ups
     debugPowerUps() {
         console.log("🔍 DEBUG Power-ups:");
         for (const [type, powerUp] of Object.entries(this.activePowerUps)) {
@@ -436,14 +463,11 @@ export class Game {
         }
     }
 
-    // Método para reset completo al menú principal
     resetToMainMenu() {
         console.log("🔄 Reiniciando a menú principal...");
         
-        // 1. Detener música del juego
         this.stopBackgroundMusic();
         
-        // 2. Resetear estado del juego
         this.isGameStarted = false;
         this.isGameOver = false;
         this.isPaused = false;
@@ -452,7 +476,6 @@ export class Game {
         this.gameSpeed = Config.GAME_START_SPEED;
         this.difficultyLevel = 1;
         
-        // 3. Resetear power-ups
         for (const type in this.activePowerUps) {
             this.activePowerUps[type].active = false;
             this.activePowerUps[type].timer = 0;
@@ -462,26 +485,21 @@ export class Game {
             }
         }
         
-        // 4. Limpiar obstáculos, monedas y power-ups
         if (this.obstacleManager) {
             this.obstacleManager.reset();
         }
         
-        // 5. Resetear jugador y mundo
         if (this.player) this.player.reset();
         if (this.world) this.world.reset();
         
-        // 6. Ocultar UI de juego
         this.ui.uiContainer.style.display = 'none';
         this.ui.gameOver.style.display = 'none';
         document.getElementById('pause-button').style.display = 'none';
         document.getElementById('pause-menu').style.display = 'none';
         
-        // 7. Mostrar menú principal
         this.ui.modalOverlay.style.display = 'flex';
         this.ui.rulesModal.style.display = 'block';
 
-        // 8. Reiniciar la música de introducción
         const introMusic = document.getElementById('intro-music');
         if (introMusic) {
             introMusic.currentTime = 0;
@@ -495,9 +513,8 @@ export class Game {
 
     startGame() {
         this.clock.start();
-        console.log("🚀 INICIANDO JUEGO - Verificando colisiones iniciales...");
+        console.log("🚀 INICIANDO JUEGO - VR Primera Persona");
         
-        // VERIFICAR COLISIONES INICIALES ANTES DE EMPEZAR
         this.checkInitialCollisions();
         
         this.ui.modalOverlay.style.display = 'none';
@@ -522,7 +539,6 @@ export class Game {
             z: this.player.group.position.z.toFixed(2)
         });
 
-        // Verificar obstáculos iniciales
         console.log(`🎯 Obstáculos al inicio: ${this.obstacleManager.obstacles.length}`);
         this.obstacleManager.obstacles.forEach((obstacle, i) => {
             const obstacleBox = obstacle.getBoundingBox();
@@ -537,7 +553,6 @@ export class Game {
             });
         });
 
-        // Verificar power-ups iniciales
         console.log(`⚡ Power-ups al inicio: ${this.obstacleManager.powerUps.length}`);
         this.obstacleManager.powerUps.forEach((powerUp, i) => {
             const powerUpBox = powerUp.getBoundingBox();
@@ -561,7 +576,6 @@ export class Game {
         this.gameSpeed = Config.GAME_START_SPEED;
         this.difficultyLevel = 1;
 
-        // Resetear power-ups
         for (const type in this.activePowerUps) {
             this.activePowerUps[type].active = false;
             this.activePowerUps[type].timer = 0;
@@ -571,7 +585,6 @@ export class Game {
         this.ui.score.textContent = `Puntos: 0`;
         this.ui.distance.textContent = `Distancia: 0m`;
 
-        // LIMPIAR OBSTÁCULOS EXISTENTES ANTES DE RESET
         if (this.obstacleManager) {
             this.obstacleManager.reset();
         }
@@ -758,7 +771,6 @@ export class Game {
                     loadPromise(assetPaths.zombieModel)
                 ]);
 
-                // Configurar texturas para modelos existentes
                 car.traverse(child => {
                     if (child.isMesh && child.material) {
                         child.material.map = carTexture;
@@ -784,7 +796,6 @@ export class Game {
                     }
                 });
 
-                // CONFIGURAR TEXTURAS PARA NUEVOS MODELOS
                 barrel.traverse(child => {
                     if (child.isMesh && child.material) {
                         child.material.map = barrelTexture;
@@ -806,7 +817,6 @@ export class Game {
                     }
                 });
 
-                // Configurar escalas
                 coin.scale.set(0.005, 0.005, 0.005);           
                 barrier.scale.set(0.01, 0.01, 0.01);           
                 car.scale.set(0.015, 0.015, 0.015);            
@@ -815,7 +825,6 @@ export class Game {
                 pipeWrench.scale.set(0.03,0.03,0.03); 
                 zombieModel.scale.set(0.011, 0.011, 0.011);
 
-                // Configurar sombras
                 [coin, barrier, car, rock, barrel, dartboard, pipeWrench, playerModel].forEach(model => {
                     model.traverse(child => {
                         if (child.isMesh) {
@@ -860,7 +869,6 @@ export class Game {
 
         this.frameCount++;
 
-        // DEBUG: Mostrar info cada 120 frames
         if (this.collisionDebugEnabled && this.frameCount % 120 === 0) {
             console.log(`🔄 Frame ${this.frameCount} - Distancia: ${this.distance.toFixed(0)}m`);
             console.log(`📍 Jugador: X=${playerPosition.x.toFixed(2)}, Z=${playerPosition.z.toFixed(2)}`);
@@ -869,7 +877,6 @@ export class Game {
             this.debugPowerUps(); 
         }
 
-        // VERIFICAR COLISIONES CON OBSTÁCULOS (SOLO ESTOS CAUSAN GAME OVER)
         for (let i = 0; i < this.obstacleManager.obstacles.length; i++) {
             const obstacle = this.obstacleManager.obstacles[i];
             const obstacleBox = obstacle.getBoundingBox();
@@ -889,7 +896,6 @@ export class Game {
             }
         }
 
-        // VERIFICAR COLISIONES CON MONEDAS (NO CAUSAN GAME OVER)
         for (let i = this.obstacleManager.coins.length - 1; i >= 0; i--) {
             const coin = this.obstacleManager.coins[i];
             const coinBox = coin.getBoundingBox();
@@ -909,7 +915,6 @@ export class Game {
             }
         }
 
-        // VERIFICAR COLISIONES CON POWER-UPS (NO CAUSAN GAME OVER)
         for (let i = this.obstacleManager.powerUps.length - 1; i >= 0; i--) {
             const powerUp = this.obstacleManager.powerUps[i];
             const powerUpBox = powerUp.getBoundingBox();
@@ -922,10 +927,8 @@ export class Game {
                     z: powerUp.mesh.position.z.toFixed(2)
                 });
                 
-                // OBTENER EL TIPO ANTES DE REMOVER
                 const powerUpType = powerUp.powerUpType;
                 
-                // Remover el power-up de la escena
                 this.obstacleManager.collectPowerUp(powerUp);
                 
                 if (powerUpType && (powerUpType === 'magnet' || powerUpType === 'double')) {
@@ -934,7 +937,6 @@ export class Game {
                 } else {
                     console.error("❌ Tipo de power-up inválido:", powerUpType);
                 }
-                // SALIR DEL LOOP DESPUÉS DE PROCESAR EL POWER-UP
                 break;
             }
         }
@@ -950,28 +952,20 @@ export class Game {
         console.log(`🛑 Puntuación: ${this.score}`);
         console.log("🛑 ================================");
 
-        // 1. Marcar Game Over para detener la lógica de movimiento en animate()
         this.isGameOver = true;
-
-        // 2. Pausar la música
         this.pauseBackgroundMusic();
 
-        // 3. Decirle al jugador que inicie la animación de "morir"
         if (this.player) {
             this.player.die();
         }
 
-        // 4. Escuchar al AnimationMixer del jugador para saber cuándo terminó
         if (this.player && this.player.mixer) {
             const dieAction = this.player.actions.die;
 
-            // Esta función se llamará cuando la animación 'die' termine
             const onDieAnimationFinished = (e) => {
-                // Solo reaccionar si la animación que terminó FUE la de morir
                 if (e.action === dieAction) {
                     console.log("Animación 'die' terminada. Mostrando menú de Game Over.");
 
-                    // 5. Llenamos las estadísticas y mostramos el menú
                     document.getElementById('final-score').textContent = this.score;
                     document.getElementById('final-distance').textContent = Math.floor(this.distance) + 'm';
                     document.getElementById('final-coins').textContent = Math.floor(this.score / 10);
@@ -979,16 +973,13 @@ export class Game {
 
                     this.ui.gameOver.style.display = 'block';
 
-                    // 6. Limpiar este listener
                     this.player.mixer.removeEventListener('finished', onDieAnimationFinished);
                 }
             };
 
-            // 7. Añadir el listener
             this.player.mixer.addEventListener('finished', onDieAnimationFinished);
 
         } else {
-            // Fallback: Si no hay mixer, mostrar el menú inmediatamente
             this.ui.gameOver.style.display = 'block';
         }
     }
@@ -1000,12 +991,10 @@ export class Game {
     }
 
     animate() {
-        // 1. Salir solo si el juego NUNCA empezó
         if (!this.isGameStarted) {
             return;
         }
 
-        // 2. En VR, usar setAnimationLoop en lugar de requestAnimationFrame
         if (this.renderer.xr.isPresenting) {
             this.renderer.setAnimationLoop(this.render.bind(this));
         } else {
@@ -1014,27 +1003,36 @@ export class Game {
         }
     }
 
-    // NUEVO: Separar la lógica de renderizado
+    // NUEVO: Render MEJORADO para VR primera persona
     render() {
-        // 3. Si el juego está en pausa, no ejecutar NADA más
         if (this.isPaused) {
             return; 
         }
 
-        // 4. Obtener Delta (siempre)
         const delta = this.clock.getDelta();
 
-        // 5. Actualizar controles VR si están activos
+        // NUEVO: Actualizar controles VR con contenedor de cámara
         if (this.vrControls && this.isVRMode) {
             this.vrControls.update(delta);
         }
 
-        // 6. Actualizar al jugador SIEMPRE
         if (this.player) {
             this.player.update(delta);
+            
+            // NUEVO: En VR primera persona, la cámara SIGUE al jugador
+            if (this.isVRMode) {
+                this.cameraContainer.position.x = this.player.group.position.x;
+                this.cameraContainer.position.z = this.player.group.position.z;
+                
+                // Ajustar altura durante saltos
+                if (this.player.state === Config.PLAYER_STATE.JUMPING) {
+                    this.cameraContainer.position.y = Config.VR_SETTINGS.PLAYER_HEIGHT + this.player.group.position.y;
+                } else {
+                    this.cameraContainer.position.y = Config.VR_SETTINGS.PLAYER_HEIGHT;
+                }
+            }
         }
 
-        // 7. Si es Game Over, solo renderizar la escena y no mover nada más
         if (this.isGameOver) {
             if (this.world) {
                 this.world.zombieCatch(delta);
@@ -1043,7 +1041,6 @@ export class Game {
             return;
         }
 
-        // 8. El resto de la lógica del juego (solo se ejecuta si NO es Game Over)
         const playerPosition = this.player.group.position;
 
         this.world.update(delta, this.gameSpeed, playerPosition);
@@ -1056,9 +1053,10 @@ export class Game {
             this.activePowerUps
         );
 
-        // 9. En VR, la cámara sigue al jugador de forma diferente
+        // NUEVO: En modo normal, cámara sigue al jugador en 3ra persona
         if (!this.isVRMode) {
-            this.camera.position.z = playerPosition.z + Config.CAMERA_START_Z;
+            this.cameraContainer.position.z = playerPosition.z + Config.CAMERA_START_Z;
+            this.cameraContainer.position.x = playerPosition.x;
         }
 
         this.distance += this.gameSpeed * delta;
@@ -1067,10 +1065,8 @@ export class Game {
         this.updatePowerUps(delta);
         this.updateDifficulty();
         
-        // Comprobar colisiones (solo si no es Game Over)
         this.checkCollisions();
 
-        // 10. Renderizar la escena
         this.renderer.render(this.scene, this.camera);
     }
 }

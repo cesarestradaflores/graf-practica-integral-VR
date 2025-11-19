@@ -1,15 +1,14 @@
 // -----------------------------------------------------------------
-// --- Config.js (Archivo de Configuración Global) - CON VR
+// --- Config.js (CONFIGURACIÓN VR PRIMERA PERSONA)
 // -----------------------------------------------------------------
 
 export const Config = {
-    LANE_WIDTH: 4,        // Ancho de cada carril
+    LANE_WIDTH: 4,
 
-    PLAYER_START_Z: 0,    // Posición Z inicial del jugador
-    CAMERA_START_Y: 6,    // Altura de la cámara (modo normal)
+    PLAYER_START_Z: 0,
+    CAMERA_START_Y: 6,
     CAMERA_START_Z: 15,
     
-    // Configuración de cámara
     CAMERA_FOV: 75,
     CAMERA_ASPECT: window.innerWidth / window.innerHeight,
     CAMERA_NEAR: 0.1,
@@ -19,7 +18,6 @@ export const Config = {
     GAME_MAX_SPEED: 40,
     GAME_SPEED_INCREASE: 0.2,
 
-    // Sistema de dificultad
     DIFFICULTY_INTERVAL: 1000,
     SPAWN_RATE_INCREASE: 0.3,
 
@@ -27,7 +25,6 @@ export const Config = {
     GRAVITY: -70,
     ROLL_DURATION: 0.7,
     
-    // Constantes de estado del jugador
     PLAYER_STATE: {
         RUNNING: 'running',
         JUMPING: 'jumping',
@@ -35,7 +32,6 @@ export const Config = {
         DEAD: 'dead'
     },
 
-    // Constantes de tipo de obstáculo 
     OBSTACLE_TYPE: {
         BARRIER: 'barrier',
         WALL: 'wall',
@@ -44,33 +40,30 @@ export const Config = {
         COIN: 'coin'
     },
 
-    // Tipos de Power-ups
     POWERUP_TYPE: {
-        MAGNET: 'magnet',    // Imán - Atrae monedas
-        DOUBLE: 'double'     // Doble - Puntuación doble
+        MAGNET: 'magnet',
+        DOUBLE: 'double'
     },
 
-    // Power-ups duran 15 segundos
     POWERUP_DURATION: {
-        magnet: 15.0,    // 15 segundos de imán
-        double: 15.0     // 15 segundos de doble puntuación
+        magnet: 15.0,
+        double: 15.0
     },
 
-    POWERUP_SPAWN_CHANCE: 0.08, // 8% de chance de aparecer en cada spawn
+    POWERUP_SPAWN_CHANCE: 0.08,
 
-    // Distancia de renderizado y niebla
     FOG_COLOR: 0x87CEEB,
     FOG_NEAR: 10,
     FOG_FAR: 300,
 
-    // Posiciones Z
     SPAWN_Z: -150,
     DESPAWN_Z: 20,
 
-    // NUEVO: Configuración VR
+    // NUEVO: Configuración VR PRIMERA PERSONA MEJORADA
     VR_SETTINGS: {
-        PLAYER_HEIGHT: 1.6,        // Altura del jugador en VR
-        GAZE_THRESHOLD: 0.3,       // Sensibilidad de la mirada
-        GAZE_DURATION: 0.5         // Tiempo requerido de mirada sostenida
+        PLAYER_HEIGHT: 1.6,
+        GAZE_THRESHOLD: 0.3,
+        GAZE_DURATION: 0.5,
+        CAMERA_SMOOTHING: 0.1
     }
 };

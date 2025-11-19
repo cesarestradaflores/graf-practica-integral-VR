@@ -1,42 +1,40 @@
 // -----------------------------------------------------------------
-// --- VRControls.js (Controles para Realidad Virtual)
+// --- VRControls.js (PRIMERA PERSONA INMERSIVA)
 // -----------------------------------------------------------------
 
 import * as THREE from 'three';
 import { Config } from './Config.js';
 
 export class VRControls {
-    constructor(camera, renderer, player, scene) {
+    constructor(camera, renderer, player, scene, cameraContainer) {
         this.camera = camera;
         this.renderer = renderer;
         this.player = player;
         this.scene = scene;
+        this.cameraContainer = cameraContainer; // NUEVO: Contenedor de cámara
         
         this.controllers = [];
         this.raycaster = new THREE.Raycaster();
         this.gazeTimer = 0;
-        this.lastGazeLane = 1; // Carril central por defecto
+        this.lastGazeLane = 1;
         
         this.setupControllers();
-        console.log("✅ VRControls inicializado");
+        console.log("✅ VRControls primera persona inicializado");
     }
     
     setupControllers() {
-        // Configurar controllers VR
         for (let i = 0; i < 2; i++) {
             const controller = this.renderer.xr.getController(i);
             this.scene.add(controller);
             this.controllers.push(controller);
             
-            // Configurar eventos de controller
             controller.addEventListener('selectstart', () => this.onSelectStart(i));
             controller.addEventListener('selectend', () => this.onSelectEnd(i));
             
-            // Añadir un rayo visual para debug
             this.addControllerRay(controller, i);
         }
         
-        console.log("🎮 Controllers VR configurados");
+        console.log("🎮 Controllers VR primera persona configurados");
     }
     
     addControllerRay(controller, index) {
@@ -55,10 +53,9 @@ export class VRControls {
     onSelectStart(controllerIndex) {
         console.log(`Controller ${controllerIndex} - Select Start`);
         
-        // Mapear controles VR a acciones del juego
-        if (controllerIndex === 0) { // Controller izquierdo - Saltar
+        if (controllerIndex === 0) {
             this.player.jump();
-        } else if (controllerIndex === 1) { // Controller derecho - Rodar
+        } else if (controllerIndex === 1) {
             this.player.roll();
         }
     }
@@ -68,45 +65,52 @@ export class VRControls {
     }
     
     update(deltaTime) {
-        // Actualizar lógica de controles VR
         if (this.controllers.length > 0) {
             this.handleGazeControls(deltaTime);
+            this.updateCameraPosition(); // NUEVO: Actualizar posición de cámara
+        }
+    }
+    
+    // NUEVO: Actualizar posición de cámara en primera persona
+    updateCameraPosition() {
+        if (this.cameraContainer && this.player) {
+            // La cámara ya está posicionada en Game.js, aquí solo verificamos
+            const playerPos = this.player.group.position;
+            const cameraPos = this.cameraContainer.position;
+            
+            // Debug opcional
+            if (Math.random() < 0.01) { // Solo cada 100 frames aprox
+                console.log("👁️ Posición VR:", {
+                    jugador: { x: playerPos.x.toFixed(2), z: playerPos.z.toFixed(2) },
+                    camara: { x: cameraPos.x.toFixed(2), z: cameraPos.z.toFixed(2) }
+                });
+            }
         }
     }
     
     handleGazeControls(deltaTime) {
-        // Sistema de selección por mirada para cambiar carriles
         this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
         
-        // Dirección de la mirada
         const gazeDirection = new THREE.Vector3();
         this.camera.getWorldDirection(gazeDirection);
         
-        // Calcular ángulo de la mirada en el plano XZ
         const gazeAngle = Math.atan2(gazeDirection.x, gazeDirection.z);
-        const gazeThreshold = 0.3; // Umbral para detectar mirada a los lados
+        const gazeThreshold = Config.VR_SETTINGS.GAZE_THRESHOLD;
         
         let targetLane = this.lastGazeLane;
         
-        // Detectar mirada a la izquierda
         if (gazeAngle < -gazeThreshold) {
-            targetLane = 0; // Carril izquierdo
-        } 
-        // Detectar mirada a la derecha
-        else if (gazeAngle > gazeThreshold) {
-            targetLane = 2; // Carril derecho
-        }
-        // Mirada al centro
-        else {
-            targetLane = 1; // Carril central
+            targetLane = 0;
+        } else if (gazeAngle > gazeThreshold) {
+            targetLane = 2;
+        } else {
+            targetLane = 1;
         }
         
-        // Solo cambiar carril si es diferente al anterior
         if (targetLane !== this.lastGazeLane) {
             this.gazeTimer += deltaTime;
             
-            // Requerir mirada sostenida por 0.5 segundos para cambiar carril
-            if (this.gazeTimer >= 0.5) {
+            if (this.gazeTimer >= Config.VR_SETTINGS.GAZE_DURATION) {
                 this.changeLane(targetLane);
                 this.lastGazeLane = targetLane;
                 this.gazeTimer = 0;
@@ -126,7 +130,6 @@ export class VRControls {
         }
     }
     
-    // Método para debug visual de la dirección de mirada
     debugGazeDirection() {
         const gazeDirection = new THREE.Vector3();
         this.camera.getWorldDirection(gazeDirection);
