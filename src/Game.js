@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------
-// --- Game.js (VERSIÓN COMPLETA - UI VR + CONTROLES MEJORADOS)
+// --- Game.js (VERSIÓN CORREGIDA - OBSTÁCULOS A RAS DE SUELO)
 // -----------------------------------------------------------------
 
 import * as THREE from 'three';
@@ -98,7 +98,7 @@ export class Game {
     }
 
     async init() {
-        console.log("🚀 Iniciando juego con UI VR completa...");
+        console.log("🚀 Iniciando juego con obstáculos corregidos...");
 
         // CONFIGURAR RENDERER
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -143,7 +143,9 @@ export class Game {
         // INICIALIZAR COMPONENTES DEL JUEGO
         this.world = new GameWorld(this.scene, this.assets);
         this.player = new Player(this.scene, this.assets);
-        this.obstacleManager = new ObstacleManager(this.scene, this.assets);
+        
+        // NUEVO: Pasar referencia del juego al ObstacleManager para correcciones
+        this.obstacleManager = new ObstacleManager(this.scene, this.assets, this);
 
         // CONFIGURAR CONTROLES VR
         this.setupVRControls();
@@ -160,7 +162,7 @@ export class Game {
         // CONFIGURAR CONTROLES DE PAUSA
         this.setupPauseControls();
 
-        console.log("🎯 Juego completamente inicializado - Listo para jugar");
+        console.log("🎯 Juego completamente inicializado - Obstáculos corregidos");
         
         return Promise.resolve();
     }
@@ -803,13 +805,13 @@ export class Game {
                 this.applyTextures(dartboard, dartboardTexture);
                 this.applyTextures(pipeWrench, pipeWrenchTexture);
 
-                // CONFIGURAR ESCALAS
+                // CONFIGURAR ESCALAS CORREGIDAS
                 this.setupModelScales(coin, barrier, car, rock, barrel, dartboard, pipeWrench, zombieModel);
 
                 // CONFIGURAR SOMBRAS
                 this.setupModelShadows(coin, barrier, car, rock, barrel, dartboard, pipeWrench, playerModel);
 
-                console.log("✅ Todos los assets configurados");
+                console.log("✅ Todos los assets configurados - Posiciones corregidas");
 
                 resolve({
                     coin: coin,
@@ -850,14 +852,17 @@ export class Game {
     }
 
     setupModelScales(coin, barrier, car, rock, barrel, dartboard, pipeWrench, zombieModel) {
+        // NUEVO: ESCALAS CORREGIDAS PARA QUE QUEDEN A RAS DE SUELO
         coin.scale.set(0.005, 0.005, 0.005);           
-        barrier.scale.set(0.01, 0.01, 0.01);           
-        car.scale.set(0.015, 0.015, 0.015);            
-        rock.scale.set(0.02, 0.02, 0.02);
-        barrel.scale.set(0.02, 0.02, 0.02);            
-        dartboard.scale.set(0.03, 0.03, 0.03);    
-        pipeWrench.scale.set(0.03, 0.03, 0.03); 
+        barrier.scale.set(0.008, 0.008, 0.008);  // REDUCIDO para mejor ajuste al suelo        
+        car.scale.set(0.012, 0.012, 0.012);      // REDUCIDO para mejor ajuste al suelo           
+        rock.scale.set(0.015, 0.015, 0.015);     // REDUCIDO
+        barrel.scale.set(0.015, 0.015, 0.015);   // REDUCIDO          
+        dartboard.scale.set(0.025, 0.025, 0.025); // REDUCIDO   
+        pipeWrench.scale.set(0.025, 0.025, 0.025); // REDUCIDO
         zombieModel.scale.set(0.011, 0.011, 0.011);
+
+        console.log("📏 Escalas de modelos corregidas para ajuste al suelo");
     }
 
     setupModelShadows(...models) {
@@ -1235,7 +1240,7 @@ export class Game {
         // ACTUALIZAR MUNDO
         this.world.update(delta, this.gameSpeed, playerPosition);
         
-        // ACTUALIZAR OBSTÁCULOS
+        // ACTUALIZAR OBSTÁCULOS (CON POSICIONES CORREGIDAS)
         this.obstacleManager.update(
             delta, 
             this.gameSpeed, 

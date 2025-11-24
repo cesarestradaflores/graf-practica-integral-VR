@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------
-// --- ObstacleManager.js - POWER-UPS (Compatibilidad VR)
+// --- ObstacleManager.js (CORREGIDO - OBSTÁCULOS A RAS DE SUELO)
 // -----------------------------------------------------------------
 
 import * as THREE from 'three';
@@ -7,9 +7,10 @@ import { Config } from './Config.js';
 import { ObstacleItem } from './ObstacleItem.js';
 
 export class ObstacleManager {
-    constructor(scene, assets) {
+    constructor(scene, assets, gameInstance = null) {
         this.scene = scene;
         this.assets = assets;
+        this.game = gameInstance; // NUEVO: Referencia al juego para debug
         this.obstacles = [];
         this.coins = [];
         this.powerUps = [];
@@ -18,7 +19,7 @@ export class ObstacleManager {
         this.baseSpawnRate = 2;
         this.difficultyLevel = 1;
         
-        console.log("✅ ObstacleManager inicializado - Compatible con VR");
+        console.log("✅ ObstacleManager inicializado - Posiciones corregidas");
     }
     
     spawnSet() {
@@ -56,31 +57,32 @@ export class ObstacleManager {
 
     spawnObstacle(lane, type) {
         let model;
-        let positionY = 0;
+        let positionY = 0; // NUEVO: TODOS a ras de suelo
         let scale = 1;
         
         switch (type) {
             case Config.OBSTACLE_TYPE.BARRIER:
                 model = this.assets.barrier.clone();
-                positionY = 0;
-                scale = 0.015;
+                positionY = 0; // CORREGIDO: estaba en 0, ahora explícito
+                scale = 0.008; // CORREGIDO: reducido para mejor ajuste
                 break;
                 
             case Config.OBSTACLE_TYPE.WALL:
                 model = this.assets.car.clone();
-                positionY = 0.5;
-                scale = 0.012;
+                positionY = 0; // CORREGIDO: estaba en 0.5, ahora a ras de suelo
+                scale = 0.012; // CORREGIDO: reducido para mejor ajuste
                 break;
                 
             case Config.OBSTACLE_TYPE.BARREL: 
                 model = this.assets.barrel.clone();
-                positionY = 1.0;
-                scale = 0.02;
+                positionY = 0; // CORREGIDO: estaba en 1.0, ahora a ras de suelo
+                scale = 0.015; // CORREGIDO: reducido para mejor ajuste
                 break;
                 
             default:
                 model = this.assets.barrier.clone();
-                scale = 0.015;
+                scale = 0.008;
+                positionY = 0;
         }
 
         model.scale.set(scale, scale, scale);
@@ -89,10 +91,15 @@ export class ObstacleManager {
         obstacle.type = type;
         
         obstacle.mesh.position.x = (lane - 1) * Config.LANE_WIDTH;
-        obstacle.mesh.position.y = positionY;
+        obstacle.mesh.position.y = positionY; // NUEVO: Siempre a ras de suelo
         obstacle.mesh.position.z = Config.SPAWN_Z;
         
         this.obstacles.push(obstacle);
+
+        // DEBUG: Verificar posición
+        if (this.game && this.game.collisionDebugEnabled) {
+            console.log(`🎯 Obstáculo generado: ${type} en Y=${positionY}`);
+        }
     }
 
     spawnCoin(lane, zPos) {
@@ -101,7 +108,7 @@ export class ObstacleManager {
         coin.type = Config.OBSTACLE_TYPE.COIN;
         
         coin.mesh.position.x = (lane - 1) * Config.LANE_WIDTH;
-        coin.mesh.position.y = 1.5;
+        coin.mesh.position.y = 1.5; // Monedas siguen altas para recoger
         coin.mesh.position.z = zPos;
         this.coins.push(coin);
     }
@@ -111,6 +118,7 @@ export class ObstacleManager {
             const powerUpType = Math.random() > 0.5 ? Config.POWERUP_TYPE.MAGNET : Config.POWERUP_TYPE.DOUBLE;
             
             let model;
+            let positionY = 1.6; // Power-ups siguen altos para visibilidad
             
             switch (powerUpType) {
                 case Config.POWERUP_TYPE.MAGNET:
@@ -134,7 +142,7 @@ export class ObstacleManager {
             powerUp.powerUpType = powerUpType;
             
             powerUp.mesh.position.x = (lane - 1) * Config.LANE_WIDTH;
-            powerUp.mesh.position.y = 1.6;
+            powerUp.mesh.position.y = positionY;
             powerUp.mesh.position.z = Config.SPAWN_Z;
             
             // Animación flotante
@@ -143,7 +151,7 @@ export class ObstacleManager {
             
             this.powerUps.push(powerUp);
             
-            console.log(`⚡ Power-up generado: ${powerUpType}`);
+            console.log(`⚡ Power-up generado: ${powerUpType} en Y=${positionY}`);
             
         } catch (error) {
             console.error("❌ Error al generar power-up:", error);
@@ -273,7 +281,7 @@ export class ObstacleManager {
         this.spawnTimer = 2;
         this.difficultyLevel = 1;
         
-        console.log(`✅ ObstacleManager reiniciado`);
+        console.log(`✅ ObstacleManager reiniciado - Obstáculos: ${obstaclesRemoved}, Monedas: ${coinsRemoved}, Power-ups: ${powerUpsRemoved}`);
     } 
     
     collectCoin(coin) {
