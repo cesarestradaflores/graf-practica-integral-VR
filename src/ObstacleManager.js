@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------
-// --- ObstacleManager.js (CORREGIDO - OBSTÁCULOS A RAS DE SUELO)
+// --- ObstacleManager.js (CORREGIDO - OBSTÁCULOS A RAS DE SUELO CON TAMAÑO ORIGINAL)
 // -----------------------------------------------------------------
 
 import * as THREE from 'three';
@@ -10,7 +10,7 @@ export class ObstacleManager {
     constructor(scene, assets, gameInstance = null) {
         this.scene = scene;
         this.assets = assets;
-        this.game = gameInstance; // NUEVO: Referencia al juego para debug
+        this.game = gameInstance;
         this.obstacles = [];
         this.coins = [];
         this.powerUps = [];
@@ -19,7 +19,7 @@ export class ObstacleManager {
         this.baseSpawnRate = 2;
         this.difficultyLevel = 1;
         
-        console.log("✅ ObstacleManager inicializado - Posiciones corregidas");
+        console.log("✅ ObstacleManager inicializado - Tamaño original, posición corregida");
     }
     
     spawnSet() {
@@ -57,31 +57,31 @@ export class ObstacleManager {
 
     spawnObstacle(lane, type) {
         let model;
-        let positionY = 0; // NUEVO: TODOS a ras de suelo
+        let positionY = 0; // TODOS a ras de suelo - CORREGIDO
         let scale = 1;
         
         switch (type) {
             case Config.OBSTACLE_TYPE.BARRIER:
                 model = this.assets.barrier.clone();
-                positionY = 0; // CORREGIDO: estaba en 0, ahora explícito
-                scale = 0.008; // CORREGIDO: reducido para mejor ajuste
+                positionY = 0; // RAS DE SUELO
+                scale = 0.01; // TAMAÑO ORIGINAL
                 break;
                 
             case Config.OBSTACLE_TYPE.WALL:
                 model = this.assets.car.clone();
-                positionY = 0; // CORREGIDO: estaba en 0.5, ahora a ras de suelo
-                scale = 0.012; // CORREGIDO: reducido para mejor ajuste
+                positionY = 0; // RAS DE SUELO (antes: 0.5)
+                scale = 0.015; // TAMAÑO ORIGINAL
                 break;
                 
             case Config.OBSTACLE_TYPE.BARREL: 
                 model = this.assets.barrel.clone();
-                positionY = 0; // CORREGIDO: estaba en 1.0, ahora a ras de suelo
-                scale = 0.015; // CORREGIDO: reducido para mejor ajuste
+                positionY = 0; // RAS DE SUELO (antes: 1.0)
+                scale = 0.02; // TAMAÑO ORIGINAL
                 break;
                 
             default:
                 model = this.assets.barrier.clone();
-                scale = 0.008;
+                scale = 0.01;
                 positionY = 0;
         }
 
@@ -91,14 +91,14 @@ export class ObstacleManager {
         obstacle.type = type;
         
         obstacle.mesh.position.x = (lane - 1) * Config.LANE_WIDTH;
-        obstacle.mesh.position.y = positionY; // NUEVO: Siempre a ras de suelo
+        obstacle.mesh.position.y = positionY; // SIEMPRE a ras de suelo
         obstacle.mesh.position.z = Config.SPAWN_Z;
         
         this.obstacles.push(obstacle);
 
         // DEBUG: Verificar posición
         if (this.game && this.game.collisionDebugEnabled) {
-            console.log(`🎯 Obstáculo generado: ${type} en Y=${positionY}`);
+            console.log(`🎯 Obstáculo generado: ${type} en Y=${positionY}, Escala=${scale}`);
         }
     }
 

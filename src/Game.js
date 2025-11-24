@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------
-// --- Game.js (VERSIÓN CORREGIDA - OBSTÁCULOS A RAS DE SUELO)
+// --- Game.js (VERSIÓN CORREGIDA - OBSTÁCULOS A RAS DE SUELO CON TAMAÑO ORIGINAL)
 // -----------------------------------------------------------------
 
 import * as THREE from 'three';
@@ -805,13 +805,13 @@ export class Game {
                 this.applyTextures(dartboard, dartboardTexture);
                 this.applyTextures(pipeWrench, pipeWrenchTexture);
 
-                // CONFIGURAR ESCALAS CORREGIDAS
+                // CONFIGURAR ESCALAS ORIGINALES (TAMAÑO NORMAL)
                 this.setupModelScales(coin, barrier, car, rock, barrel, dartboard, pipeWrench, zombieModel);
 
                 // CONFIGURAR SOMBRAS
                 this.setupModelShadows(coin, barrier, car, rock, barrel, dartboard, pipeWrench, playerModel);
 
-                console.log("✅ Todos los assets configurados - Posiciones corregidas");
+                console.log("✅ Todos los assets configurados - Tamaños originales");
 
                 resolve({
                     coin: coin,
@@ -852,17 +852,17 @@ export class Game {
     }
 
     setupModelScales(coin, barrier, car, rock, barrel, dartboard, pipeWrench, zombieModel) {
-        // NUEVO: ESCALAS CORREGIDAS PARA QUE QUEDEN A RAS DE SUELO
+        // NUEVO: ESCALAS ORIGINALES (TAMAÑO NORMAL) - SOLO POSICIÓN CORREGIDA
         coin.scale.set(0.005, 0.005, 0.005);           
-        barrier.scale.set(0.008, 0.008, 0.008);  // REDUCIDO para mejor ajuste al suelo        
-        car.scale.set(0.012, 0.012, 0.012);      // REDUCIDO para mejor ajuste al suelo           
-        rock.scale.set(0.015, 0.015, 0.015);     // REDUCIDO
-        barrel.scale.set(0.015, 0.015, 0.015);   // REDUCIDO          
-        dartboard.scale.set(0.025, 0.025, 0.025); // REDUCIDO   
-        pipeWrench.scale.set(0.025, 0.025, 0.025); // REDUCIDO
+        barrier.scale.set(0.01, 0.01, 0.01);  // TAMAÑO ORIGINAL        
+        car.scale.set(0.015, 0.015, 0.015);   // TAMAÑO ORIGINAL         
+        rock.scale.set(0.02, 0.02, 0.02);     // TAMAÑO ORIGINAL
+        barrel.scale.set(0.02, 0.02, 0.02);   // TAMAÑO ORIGINAL         
+        dartboard.scale.set(0.03, 0.03, 0.03); // TAMAÑO ORIGINAL  
+        pipeWrench.scale.set(0.03, 0.03, 0.03); // TAMAÑO ORIGINAL
         zombieModel.scale.set(0.011, 0.011, 0.011);
 
-        console.log("📏 Escalas de modelos corregidas para ajuste al suelo");
+        console.log("📏 Escalas ORIGINALES restauradas - Solo posición Y corregida");
     }
 
     setupModelShadows(...models) {
