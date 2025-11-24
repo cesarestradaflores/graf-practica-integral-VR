@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------
-// --- Game.js (VR PRIMERA PERSONA - CÁMARA EN JUGADOR)
+// --- Game.js (VERSIÓN COMPLETA - UI VR + CONTROLES MEJORADOS)
 // -----------------------------------------------------------------
 
 import * as THREE from 'three';
@@ -22,7 +22,10 @@ export class Game {
             Config.CAMERA_NEAR,
             Config.CAMERA_FAR
         );
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            alpha: true
+        });
         this.clock = new THREE.Clock();
         
         this.player = null;
@@ -30,17 +33,19 @@ export class Game {
         this.obstacleManager = null;
         this.assets = {};
 
-        // Configuración VR MEJORADA
+        // CONFIGURACIÓN VR MEJORADA
         this.isVRMode = false;
         this.vrControls = null;
-        this.cameraContainer = new THREE.Group(); // NUEVO: Contenedor para cámara en VR
+        this.cameraContainer = new THREE.Group();
 
+        // SISTEMA DE AUDIO
         this.audioListener = null;
         this.backgroundMusic = null;
         this.coinSound = null;
         this.powerUpSound = null;
         this.isMusicPlaying = false;
 
+        // ESTADO DEL JUEGO
         this.isGameStarted = false;
         this.isGameOver = false;
         this.isPaused = false;
@@ -48,6 +53,7 @@ export class Game {
         this.score = 0;
         this.distance = 0;
         this.difficultyLevel = 1;
+        this.coinsCollected = 0;
 
         // SISTEMA DE POWER-UPS
         this.activePowerUps = {
@@ -55,6 +61,7 @@ export class Game {
             double: { active: false, timer: 0 }
         };
 
+        // REFERENCIAS UI HTML
         this.ui = {
             score: document.getElementById('score'),
             distance: document.getElementById('distance'),
@@ -65,9 +72,16 @@ export class Game {
             errorScreen: document.getElementById('error-screen'),
             uiContainer: document.getElementById('ui-container'),
             modalOverlay: document.getElementById('modal-overlay'),
-            rulesModal: document.getElementById('rules-modal')
+            rulesModal: document.getElementById('rules-modal'),
+            pauseButton: document.getElementById('pause-button'),
+            pauseMenu: document.getElementById('pause-menu'),
+            finalScore: document.getElementById('final-score'),
+            finalDistance: document.getElementById('final-distance'),
+            finalCoins: document.getElementById('final-coins'),
+            finalTime: document.getElementById('final-time')
         };
 
+        // INDICADORES DE POWER-UPS
         this.powerUpIndicators = {
             magnet: document.createElement('div'),
             double: document.createElement('div')
@@ -77,83 +91,104 @@ export class Game {
         
         // DEBUG
         this.frameCount = 0;
-        this.collisionDebugEnabled = true;
+        this.collisionDebugEnabled = false;
+        this.lastDistanceUpdate = 0;
+
+        console.log("🎮 Game inicializado - Listo para VR");
     }
 
     async init() {
-        console.log("Iniciando el juego con VR primera persona...");
+        console.log("🚀 Iniciando juego con UI VR completa...");
 
+        // CONFIGURAR RENDERER
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-
-        // NUEVO: Configuración WebXR MEJORADA
-        this.setupWebXR();
-
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.outputEncoding = THREE.sRGBEncoding;
         document.body.appendChild(this.renderer.domElement);
 
-        // NUEVO: Configurar contenedor de cámara para VR
+        // CONFIGURAR WEBXR
+        this.setupWebXR();
+
+        // CONFIGURAR CÁMARA
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+
+        // CONFIGURAR CONTENEDOR DE CÁMARA
         this.setupCameraContainer();
 
+        // CONFIGURAR AUDIO
         this.setupAudio();
 
+        // CONFIGURAR ESCENA
         this.scene.fog = new THREE.Fog(Config.FOG_COLOR, Config.FOG_NEAR, Config.FOG_FAR);
-        
-        // POSICIÓN INICIAL MEJORADA - Permite ver zombie atrás
         this.cameraContainer.position.set(0, Config.VR_SETTINGS.PLAYER_HEIGHT, 0);
-        this.camera.position.set(0, 0, 0); // Cámara dentro del contenedor
+        this.camera.position.set(0, 0, 0);
 
         try {
+            // PRECARGAR ASSETS
             this.assets = await this.preloadAssets();
             this.ui.loadingScreen.style.display = 'none';
-            console.log("Assets cargados, mostrando modal de reglas.");
+            console.log("✅ Todos los assets cargados correctamente");
             
         } catch (error) {
-            console.error("Error al cargar assets:", error);
+            console.error("❌ Error al cargar assets:", error);
             this.ui.loadingScreen.style.display = 'none';
             this.ui.errorScreen.style.display = 'flex';
             return Promise.reject(error);
         }
         
+        // INICIALIZAR COMPONENTES DEL JUEGO
         this.world = new GameWorld(this.scene, this.assets);
         this.player = new Player(this.scene, this.assets);
         this.obstacleManager = new ObstacleManager(this.scene, this.assets);
 
-        // NUEVO: Configurar controles VR después de crear el player
+        // CONFIGURAR CONTROLES VR
         this.setupVRControls();
 
+        // CONFIGURAR ILUMINACIÓN
         this.setupLights();
+
+        // CARGAR ENTORNO
         this.loadEnvironment('Recursos/sunset_jhbcentral_4k.hdr'); 
 
-        window.addEventListener('resize', this.onWindowResize.bind(this), false);
-        document.addEventListener('keydown', this.player.onKeyDown.bind(this.player), false);
+        // CONFIGURAR EVENTOS
+        this.setupEventListeners();
 
-        console.log("Iniciación completa. VR primera persona configurada.");
+        // CONFIGURAR CONTROLES DE PAUSA
+        this.setupPauseControls();
+
+        console.log("🎯 Juego completamente inicializado - Listo para jugar");
         
         return Promise.resolve();
     }
 
-    // NUEVO: Configurar contenedor de cámara para VR
-    setupCameraContainer() {
-        this.scene.add(this.cameraContainer);
-        this.cameraContainer.add(this.camera);
-        console.log("✅ Contenedor de cámara VR configurado");
-    }
-
-    // NUEVO MÉTODO: Configuración WebXR MEJORADA
     setupWebXR() {
         this.renderer.xr.enabled = true;
         
         const vrButton = VRButton.createButton(this.renderer);
+        vrButton.style.cssText = `
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        `;
         document.body.appendChild(vrButton);
         
         this.renderer.xr.addEventListener('sessionstart', () => {
-            console.log('🚀 Sesión VR iniciada - Primera persona activada');
+            console.log('🚀 Sesión VR iniciada - UI VR activada');
             this.onVRStart();
         });
         
@@ -162,94 +197,138 @@ export class Game {
             this.onVREnd();
         });
         
-        console.log("✅ WebXR configurado - Primera persona inmersiva");
+        console.log("✅ WebXR configurado - Botón VR añadido");
     }
 
-    // NUEVO: Configurar controles VR MEJORADOS
+    setupCameraContainer() {
+        this.scene.add(this.cameraContainer);
+        this.cameraContainer.add(this.camera);
+        console.log("✅ Contenedor de cámara VR configurado");
+    }
+
     setupVRControls() {
         if (this.renderer.xr.enabled && this.player) {
-            this.vrControls = new VRControls(this.camera, this.renderer, this.player, this.scene, this.cameraContainer);
-            console.log("✅ Controles VR primera persona configurados");
+            this.vrControls = new VRControls(
+                this.camera, 
+                this.renderer, 
+                this.player, 
+                this.scene, 
+                this.cameraContainer,
+                this
+            );
+            
+            // CONFIGURAR UMBRALES MEJORADOS
+            this.vrControls.setHeadRotationThreshold(30); // 30 grados
+            this.vrControls.setGazeDuration(0.8); // 0.8 segundos
+            
+            console.log("✅ Controles VR configurados - Umbral: 30°, Duración: 0.8s");
         }
-    }
-
-    // NUEVO: Cuando inicia sesión VR - PRIMERA PERSONA
-    onVRStart() {
-        this.isVRMode = true;
-        this.player.enableVRMode();
-        
-        // OCULTAR MODELO DEL JUGADOR EN VR (eres tú mismo)
-        if (this.player.group) {
-            this.player.group.visible = false;
-        }
-        
-        // Posicionar contenedor de cámara en el jugador
-        this.cameraContainer.position.set(
-            this.player.group.position.x,
-            Config.VR_SETTINGS.PLAYER_HEIGHT,
-            this.player.group.position.z
-        );
-        
-        // Disparar evento personalizado para la UI
-        window.dispatchEvent(new CustomEvent('game-vr-start'));
-        
-        console.log("🎮 Modo VR primera persona activado - Eres el personaje");
-    }
-
-    // NUEVO: Cuando termina sesión VR
-    onVREnd() {
-        this.isVRMode = false;
-        this.player.disableVRMode();
-        
-        // MOSTRAR MODELO DEL JUGADOR en modo normal
-        if (this.player.group) {
-            this.player.group.visible = true;
-        }
-        
-        // Restaurar cámara normal
-        this.cameraContainer.position.set(0, Config.CAMERA_START_Y, Config.CAMERA_START_Z);
-        this.cameraContainer.lookAt(0, 0, 0);
-        
-        // Disparar evento personalizado para la UI
-        window.dispatchEvent(new CustomEvent('game-vr-end'));
-        
-        console.log("🖥️ Modo VR desactivado - Volviendo a tercera persona");
     }
 
     setupAudio() {
         this.audioListener = new THREE.AudioListener();
         this.camera.add(this.audioListener);
         
+        // MÚSICA DE FONDO
         this.backgroundMusic = new THREE.Audio(this.audioListener);
-        
         const audioLoader = new THREE.AudioLoader();
         
         audioLoader.load('Recursos/Subway Surfers.mp3', (buffer) => {
             this.backgroundMusic.setBuffer(buffer);
             this.backgroundMusic.setLoop(true);
             this.backgroundMusic.setVolume(0.3);
-            console.log("Música cargada correctamente");
+            console.log("🎵 Música de fondo cargada");
         }, undefined, (error) => {
-            console.error("Error al cargar la música:", error);
+            console.warn("⚠️ No se pudo cargar la música:", error);
         });
 
+        // SONIDO DE MONEDAS
         this.coinSound = new THREE.Audio(this.audioListener);
         audioLoader.load('Recursos/SonidoMoneda.mp3', (buffer) => {
             this.coinSound.setBuffer(buffer);
             this.coinSound.setVolume(0.5);
-            console.log("Sonido de monedas cargado correctamente");
+            console.log("💰 Sonido de monedas cargado");
         }, undefined, (error) => {
-            console.error("Error al cargar el sonido de monedas:", error);
+            console.warn("⚠️ No se pudo cargar sonido de monedas:", error);
         });
 
+        // SONIDO DE POWER-UPS
         this.powerUpSound = new THREE.Audio(this.audioListener);
         audioLoader.load('Recursos/SonidoMoneda.mp3', (buffer) => {
             this.powerUpSound.setBuffer(buffer);
             this.powerUpSound.setVolume(0.8);
-            console.log("Sonido de power-ups cargado correctamente");
+            console.log("⚡ Sonido de power-ups cargado");
         }, undefined, (error) => {
-            console.error("Error al cargar el sonido de power-ups:", error);
+            console.warn("⚠️ No se pudo cargar sonido de power-ups:", error);
         });
+    }
+
+    setupEventListeners() {
+        window.addEventListener('resize', this.onWindowResize.bind(this), false);
+        document.addEventListener('keydown', this.player.onKeyDown.bind(this.player), false);
+        
+        // EVENTOS PERSONALIZADOS
+        window.addEventListener('game-vr-start', () => {
+            console.log("🎮 Evento VR Start recibido");
+        });
+        
+        window.addEventListener('game-vr-end', () => {
+            console.log("🎮 Evento VR End recibido");
+        });
+    }
+
+    setupPauseControls() {
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Escape' && this.isGameStarted && !this.isGameOver) {
+                this.togglePause();
+            }
+        });
+
+        if (this.ui.pauseButton) {
+            this.ui.pauseButton.addEventListener('click', () => {
+                this.togglePause();
+            });
+        }
+
+        // BOTONES DE PAUSA HTML
+        const resumeButton = document.getElementById('resume-button');
+        const restartFromPause = document.getElementById('restart-from-pause');
+        const mainMenuFromPause = document.getElementById('main-menu-from-pause');
+
+        if (resumeButton) {
+            resumeButton.addEventListener('click', () => {
+                this.resumeGame();
+            });
+        }
+
+        if (restartFromPause) {
+            restartFromPause.addEventListener('click', () => {
+                this.restartGame();
+                this.ui.pauseMenu.style.display = 'none';
+            });
+        }
+
+        if (mainMenuFromPause) {
+            mainMenuFromPause.addEventListener('click', () => {
+                this.resetToMainMenu();
+            });
+        }
+
+        // BOTONES DE GAME OVER HTML
+        const restartButton = document.getElementById('restart-button');
+        const mainMenuFromGameover = document.getElementById('main-menu-from-gameover');
+
+        if (restartButton) {
+            restartButton.addEventListener('click', () => {
+                this.restartGame();
+            });
+        }
+
+        if (mainMenuFromGameover) {
+            mainMenuFromGameover.addEventListener('click', () => {
+                this.resetToMainMenu();
+            });
+        }
     }
 
     setupPowerUpUI() {
@@ -263,62 +342,554 @@ export class Game {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            font-family: Arial, sans-serif;
         `;
 
+        // INDICADOR DE IMÁN
         this.powerUpIndicators.magnet.id = 'magnet-indicator';
         this.powerUpIndicators.magnet.style.cssText = `
             background: rgba(255, 0, 0, 0.3);
             border: 2px solid #FF0000;
             border-radius: 10px;
-            padding: 10px;
+            padding: 12px 16px;
             color: white;
             font-weight: bold;
-            min-width: 140px;
+            min-width: 160px;
             text-align: center;
             display: none;
             transition: all 0.3s ease;
             font-size: 14px;
+            backdrop-filter: blur(10px);
         `;
-        this.powerUpIndicators.magnet.innerHTML = '🎯 IMÁN: <span class="timer">0.0s</span>';
+        this.powerUpIndicators.magnet.innerHTML = '🎯 IMÁN ACTIVO: <span class="timer">0.0s</span>';
 
+        // INDICADOR DE DOBLE PUNTUACIÓN
         this.powerUpIndicators.double.id = 'double-indicator';
         this.powerUpIndicators.double.style.cssText = `
-            background: rgba(255, 255, 0, 0.3);
-            border: 2px solid #FFFF00;
+            background: rgba(255, 215, 0, 0.3);
+            border: 2px solid #FFD700;
             border-radius: 10px;
-            padding: 10px;
+            padding: 12px 16px;
             color: white;
             font-weight: bold;
-            min-width: 140px;
+            min-width: 160px;
             text-align: center;
             display: none;
             transition: all 0.3s ease;
             font-size: 14px;
+            backdrop-filter: blur(10px);
         `;
-        this.powerUpIndicators.double.innerHTML = '🔧 DOBLE: <span class="timer">0.0s</span>';
+        this.powerUpIndicators.double.innerHTML = '🔧 DOBLE PUNTOS: <span class="timer">0.0s</span>';
 
         powerUpContainer.appendChild(this.powerUpIndicators.magnet);
         powerUpContainer.appendChild(this.powerUpIndicators.double);
         document.body.appendChild(powerUpContainer);
     }
 
-    activatePowerUp(type) {
-        console.log(`🎯 ACTIVANDO POWER-UP: ${type}`);
+    onVRStart() {
+        this.isVRMode = true;
+        this.player.enableVRMode();
         
-        const duration = Config.POWERUP_DURATION[type];
+        // OCULTAR MODELO DEL JUGADOR EN VR
+        if (this.player.group) {
+            this.player.group.visible = false;
+        }
         
-        this.activePowerUps[type].active = true;
-        this.activePowerUps[type].timer = duration;
+        // POSICIONAR CÁMARA EN EL JUGADOR
+        this.cameraContainer.position.set(
+            this.player.group.position.x,
+            Config.VR_SETTINGS.PLAYER_HEIGHT,
+            this.player.group.position.z
+        );
         
-        this.powerUpIndicators[type].style.display = 'block';
-        this.powerUpIndicators[type].style.background = type === 'magnet' 
-            ? 'rgba(255, 0, 0, 0.7)' 
-            : 'rgba(255, 255, 0, 0.7)';
+        // MOSTRAR MENÚ DE INICIO EN VR
+        if (this.vrControls && !this.isGameStarted) {
+            this.vrControls.showStartMenu();
+        }
         
-        this.playPowerUpSound();
-        this.showPowerUpNotification(type);
+        // OCULTAR UI HTML EN VR
+        this.hideHTMLUI();
         
-        console.log(`✅ Power-up ACTIVADO: ${type} por ${duration}s`);
+        window.dispatchEvent(new CustomEvent('game-vr-start'));
+        
+        console.log("🎮 Modo VR primera persona activado - UI VR visible");
+    }
+
+    onVREnd() {
+        this.isVRMode = false;
+        this.player.disableVRMode();
+        
+        // MOSTRAR MODELO DEL JUGADOR
+        if (this.player.group) {
+            this.player.group.visible = true;
+        }
+        
+        // OCULTAR UI VR Y MOSTRAR UI HTML
+        if (this.vrControls) {
+            this.vrControls.hideAllMenus();
+        }
+        this.showHTMLUI();
+        
+        // RESTAURAR CÁMARA NORMAL
+        this.cameraContainer.position.set(0, Config.CAMERA_START_Y, Config.CAMERA_START_Z);
+        this.cameraContainer.lookAt(0, 0, 0);
+        
+        window.dispatchEvent(new CustomEvent('game-vr-end'));
+        
+        console.log("🖥️ Modo VR desactivado - Volviendo a modo normal");
+    }
+
+    hideHTMLUI() {
+        if (this.ui.uiContainer) this.ui.uiContainer.style.display = 'none';
+        if (this.ui.pauseButton) this.ui.pauseButton.style.display = 'none';
+        if (this.ui.modalOverlay) this.ui.modalOverlay.style.display = 'none';
+        if (this.ui.gameOver) this.ui.gameOver.style.display = 'none';
+        if (this.ui.pauseMenu) this.ui.pauseMenu.style.display = 'none';
+    }
+
+    showHTMLUI() {
+        if (!this.isGameStarted && this.ui.modalOverlay) {
+            this.ui.modalOverlay.style.display = 'flex';
+        } else if (this.isGameStarted && !this.isGameOver) {
+            if (this.ui.uiContainer) this.ui.uiContainer.style.display = 'block';
+            if (this.ui.pauseButton) this.ui.pauseButton.style.display = 'block';
+        } else if (this.isGameOver && this.ui.gameOver) {
+            this.ui.gameOver.style.display = 'block';
+        }
+    }
+
+    startGame() {
+        this.clock.start();
+        console.log("🚀 INICIANDO JUEGO - Modo VR: " + this.isVRMode);
+        
+        this.checkInitialCollisions();
+        
+        // OCULTAR INTERFACES
+        this.ui.modalOverlay.style.display = 'none';
+        this.ui.rulesModal.style.display = 'none';
+        
+        if (this.isVRMode && this.vrControls) {
+            this.vrControls.hideAllMenus();
+        } else {
+            this.ui.uiContainer.style.display = 'block';
+            this.ui.pauseButton.style.display = 'block';
+        }
+
+        this.isGameStarted = true;
+        this.isGameOver = false;
+        this.isPaused = false;
+        
+        this.playBackgroundMusic();
+        this.resetGameLogic();
+        this.animate();
+    }
+
+    togglePause() {
+        if (!this.isGameStarted || this.isGameOver) return;
+        
+        if (this.isPaused) {
+            this.resumeGame();
+        } else {
+            this.pauseGame();
+        }
+    }
+
+    pauseGame() {
+        if (this.isGameStarted && !this.isGameOver && !this.isPaused) {
+            this.isPaused = true;
+            this.clock.stop();
+            this.pauseBackgroundMusic();
+            
+            // MOSTRAR MENÚ DE PAUSA SEGÚN MODO
+            if (this.isVRMode && this.vrControls) {
+                this.vrControls.showPauseMenu();
+            } else {
+                this.ui.pauseMenu.style.display = 'block';
+            }
+            
+            console.log("⏸️ Juego pausado");
+        }
+    }
+
+    resumeGame() {
+        if (this.isPaused) {
+            this.isPaused = false;
+            this.clock.start();
+            
+            // OCULTAR MENÚS DE PAUSA
+            if (this.isVRMode && this.vrControls) {
+                this.vrControls.hideAllMenus();
+            } else {
+                this.ui.pauseMenu.style.display = 'none';
+            }
+            
+            this.playBackgroundMusic();
+            console.log("▶️ Juego reanudado");
+        }
+    }
+
+    restartGame() {
+        this.clock.start();
+        console.log("🔄 Reiniciando juego...");
+        
+        this.ui.gameOver.style.display = 'none';
+        this.ui.pauseMenu.style.display = 'none';
+        this.isGameOver = false;
+        this.isPaused = false;
+        
+        this.playBackgroundMusic();
+        this.resetGameLogic();
+        this.animate();
+    }
+
+    resetGameLogic() {
+        console.log("🔄 Reseteando lógica del juego...");
+        
+        this.score = 0;
+        this.distance = 0;
+        this.coinsCollected = 0;
+        this.gameSpeed = Config.GAME_START_SPEED;
+        this.difficultyLevel = 1;
+
+        // RESETEAR POWER-UPS
+        for (const type in this.activePowerUps) {
+            this.activePowerUps[type].active = false;
+            this.activePowerUps[type].timer = 0;
+            this.powerUpIndicators[type].style.display = 'none';
+        }
+
+        // ACTUALIZAR UI
+        this.ui.score.textContent = `Puntos: 0`;
+        this.ui.distance.textContent = `Distancia: 0m`;
+
+        // LIMPIAR OBSTÁCULOS EXISTENTES
+        if (this.obstacleManager) {
+            this.obstacleManager.reset();
+        }
+        
+        // RESETEAR JUGADOR Y MUNDO
+        if (this.player) this.player.reset();
+        if (this.world) this.world.reset();
+
+        console.log("✅ Juego reiniciado - Listo para empezar");
+    }
+
+    resetToMainMenu() {
+        console.log("🔄 Reiniciando a menú principal...");
+        
+        // DETENER MÚSICA
+        this.stopBackgroundMusic();
+        
+        // RESETEAR ESTADO
+        this.isGameStarted = false;
+        this.isGameOver = false;
+        this.isPaused = false;
+        this.score = 0;
+        this.distance = 0;
+        this.coinsCollected = 0;
+        this.gameSpeed = Config.GAME_START_SPEED;
+        this.difficultyLevel = 1;
+        
+        // RESETEAR POWER-UPS
+        for (const type in this.activePowerUps) {
+            this.activePowerUps[type].active = false;
+            this.activePowerUps[type].timer = 0;
+            if (this.powerUpIndicators[type]) {
+                this.powerUpIndicators[type].style.display = 'none';
+                this.powerUpIndicators[type].style.opacity = '1';
+            }
+        }
+        
+        // LIMPIAR OBSTÁCULOS
+        if (this.obstacleManager) {
+            this.obstacleManager.reset();
+        }
+        
+        // RESETEAR JUGADOR Y MUNDO
+        if (this.player) this.player.reset();
+        if (this.world) this.world.reset();
+        
+        // OCULTAR UI DE JUEGO
+        this.ui.uiContainer.style.display = 'none';
+        this.ui.gameOver.style.display = 'none';
+        this.ui.pauseButton.style.display = 'none';
+        this.ui.pauseMenu.style.display = 'none';
+        
+        // MOSTRAR MENÚ PRINCIPAL SEGÚN MODO
+        if (this.isVRMode && this.vrControls) {
+            this.vrControls.showStartMenu();
+        } else {
+            this.ui.modalOverlay.style.display = 'flex';
+            this.ui.rulesModal.style.display = 'block';
+        }
+
+        // REINICIAR MÚSICA DE INTRODUCCIÓN
+        const introMusic = document.getElementById('intro-music');
+        if (introMusic) {
+            introMusic.currentTime = 0;
+            if (!introMusic.muted) {
+                introMusic.play().catch(e => console.log('Error al reanudar música:', e));
+            }
+        }
+        
+        console.log("✅ Menú principal cargado correctamente");
+    }
+
+    setupLights() {
+        // LUZ AMBIENTAL
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        this.scene.add(ambientLight);
+
+        // LUZ DIRECCIONAL PRINCIPAL
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.1;
+        dirLight.shadow.camera.far = 50;
+        dirLight.shadow.camera.left = -20;
+        dirLight.shadow.camera.right = 20;
+        dirLight.shadow.camera.top = 20;
+        dirLight.shadow.camera.bottom = -20;
+        this.scene.add(dirLight);
+
+        // LUZ DE RELLENO
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        fillLight.position.set(-5, 5, -5);
+        this.scene.add(fillLight);
+
+        console.log("💡 Sistema de iluminación configurado");
+    }
+
+    loadEnvironment(hdrPath) {
+        const rgbeLoader = new RGBELoader();
+        rgbeLoader.load(hdrPath, (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            this.scene.background = texture;
+            this.scene.environment = texture;
+            console.log("🌅 Fondo HDR cargado correctamente");
+        }, undefined, (err) => {
+            console.warn("⚠️ No se pudo cargar el fondo HDR. Usando fondo por defecto.", err);
+            this.scene.background = new THREE.Color(0x87CEEB);
+        });
+    }
+
+    checkInitialCollisions() {
+        if (!this.collisionDebugEnabled) return;
+        
+        console.log("🔍 Verificando colisiones iniciales...");
+        
+        const playerBox = this.player.getBoundingBox();
+        console.log("📍 Posición inicial del jugador:", {
+            x: this.player.group.position.x.toFixed(2),
+            y: this.player.group.position.y.toFixed(2), 
+            z: this.player.group.position.z.toFixed(2)
+        });
+
+        console.log(`🎯 Obstáculos al inicio: ${this.obstacleManager.obstacles.length}`);
+        console.log(`💰 Monedas al inicio: ${this.obstacleManager.coins.length}`);
+        console.log(`⚡ Power-ups al inicio: ${this.obstacleManager.powerUps.length}`);
+    }
+
+    preloadAssets() {
+        console.log("📦 Precargando assets...");
+        const fbxLoader = new FBXLoader();
+        const textureLoader = new THREE.TextureLoader();
+        const totalAssets = 15; 
+        let loadedCount = 0;
+
+        const updateProgress = () => {
+            loadedCount++;
+            const progress = (loadedCount / totalAssets) * 100;
+            this.ui.loadingBar.style.width = `${progress}%`;
+            this.ui.loadingText.textContent = `${Math.round(progress)}%`;
+        };
+
+        const loadPromise = (path) => {
+            return new Promise((resolve, reject) => {
+                fbxLoader.load(path, (obj) => {
+                    updateProgress();
+                    resolve(obj);
+                }, undefined, (err) => {
+                    console.error(`❌ Error cargando ${path}`, err);
+                    reject(err);
+                });
+            });
+        };
+
+        const loadTexturePromise = (path) => {
+            return new Promise((resolve, reject) => {
+                textureLoader.load(path, (texture) => {
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                    resolve(texture);
+                }, undefined, (err) => {
+                    console.error(`❌ Error cargando textura ${path}`, err);
+                    reject(err);
+                });
+            });
+        };
+
+        return new Promise(async (resolve, reject) => {
+            try {
+                const assetPaths = {
+                    coin: 'Recursos/Low Poly Coin.fbx',
+                    barrier: 'Recursos/concrete_road_barrier4k.fbx',
+                    car: 'Recursos/covered_car4k.fbx',
+                    rock: 'Recursos/moon_rock_4k.fbx',
+                    barrel: 'Recursos/Barrel.fbx',
+                    dartboard: 'Recursos/dartboard_4k.fbx', 
+                    pipeWrench: 'Recursos/pipe_wrench_4k.fbx', 
+                    playerModel: 'Recursos/character.fbx',
+                    animRun: 'Recursos/Fast Run.fbx',
+                    animJump: 'Recursos/Jump.fbx',
+                    animDie: 'Recursos/Death.fbx',
+                    animRoll: 'Recursos/Sprinting Forward Roll.fbx',
+                    animLeft: 'Recursos/Left.fbx',   
+                    animRight: 'Recursos/Right.fbx',
+                    zombieModel: 'Recursos/Zombie Walk1.fbx'
+                };
+
+                console.log("🎨 Cargando texturas...");
+                const [
+                    carTexture,
+                    barrierDiffTexture,
+                    barrierDispTexture,
+                    rockDiffTexture,
+                    rockDispTexture,
+                    barrelTexture, 
+                    dartboardTexture, 
+                    pipeWrenchTexture 
+                ] = await Promise.all([
+                    loadTexturePromise('Recursos/covered_car_diff_4k.jpg'),
+                    loadTexturePromise('Recursos/concrete_road_barrier_diff_4k.jpg'),
+                    loadTexturePromise('Recursos/concrete_road_barrier_disp_4k.png'),
+                    loadTexturePromise('Recursos/moon_rock_03_diff_4k.jpg'),
+                    loadTexturePromise('Recursos/moon_rock_03_disp_4k.png'),
+                    loadTexturePromise('Recursos/Barrel_01.png'), 
+                    loadTexturePromise('Recursos/dartboard_diff_4k.jpg'), 
+                    loadTexturePromise('Recursos/pipe_wrench_diff_4k.jpg') 
+                ]);
+
+                console.log("🔄 Cargando modelos 3D...");
+                const [
+                    coin, barrier, car, rock, barrel, dartboard,
+                    pipeWrench, playerModel, animRun, animJump,
+                    animDie, animRoll, animLeft, animRight, zombieModel
+                ] = await Promise.all([
+                    loadPromise(assetPaths.coin),
+                    loadPromise(assetPaths.barrier),
+                    loadPromise(assetPaths.car),
+                    loadPromise(assetPaths.rock),
+                    loadPromise(assetPaths.barrel),
+                    loadPromise(assetPaths.dartboard), 
+                    loadPromise(assetPaths.pipeWrench), 
+                    loadPromise(assetPaths.playerModel),
+                    loadPromise(assetPaths.animRun),
+                    loadPromise(assetPaths.animJump),
+                    loadPromise(assetPaths.animDie),
+                    loadPromise(assetPaths.animRoll),
+                    loadPromise(assetPaths.animLeft),
+                    loadPromise(assetPaths.animRight),
+                    loadPromise(assetPaths.zombieModel)
+                ]);
+
+                // APLICAR TEXTURAS
+                this.applyTextures(car, carTexture);
+                this.applyTextures(barrier, barrierDiffTexture, barrierDispTexture);
+                this.applyTextures(rock, rockDiffTexture, rockDispTexture);
+                this.applyTextures(barrel, barrelTexture);
+                this.applyTextures(dartboard, dartboardTexture);
+                this.applyTextures(pipeWrench, pipeWrenchTexture);
+
+                // CONFIGURAR ESCALAS
+                this.setupModelScales(coin, barrier, car, rock, barrel, dartboard, pipeWrench, zombieModel);
+
+                // CONFIGURAR SOMBRAS
+                this.setupModelShadows(coin, barrier, car, rock, barrel, dartboard, pipeWrench, playerModel);
+
+                console.log("✅ Todos los assets configurados");
+
+                resolve({
+                    coin: coin,
+                    playerModel: playerModel,
+                    barrier: barrier,
+                    car: car,
+                    rock: rock,
+                    barrel: barrel, 
+                    dartboard: dartboard, 
+                    pipeWrench: pipeWrench, 
+                    obstacleBarriers: [barrier, car, rock, barrel], 
+                    animRun: animRun,
+                    animJump: animJump,
+                    animDie: animDie,
+                    animRoll: animRoll,
+                    animLeft: animLeft,
+                    animRight: animRight,
+                    zombieModel: zombieModel
+                });
+
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    applyTextures(model, diffuseMap, displacementMap = null) {
+        model.traverse(child => {
+            if (child.isMesh && child.material) {
+                child.material.map = diffuseMap;
+                if (displacementMap) {
+                    child.material.displacementMap = displacementMap;
+                    child.material.displacementScale = 0.1;
+                }
+                child.material.needsUpdate = true;
+            }
+        });
+    }
+
+    setupModelScales(coin, barrier, car, rock, barrel, dartboard, pipeWrench, zombieModel) {
+        coin.scale.set(0.005, 0.005, 0.005);           
+        barrier.scale.set(0.01, 0.01, 0.01);           
+        car.scale.set(0.015, 0.015, 0.015);            
+        rock.scale.set(0.02, 0.02, 0.02);
+        barrel.scale.set(0.02, 0.02, 0.02);            
+        dartboard.scale.set(0.03, 0.03, 0.03);    
+        pipeWrench.scale.set(0.03, 0.03, 0.03); 
+        zombieModel.scale.set(0.011, 0.011, 0.011);
+    }
+
+    setupModelShadows(...models) {
+        models.forEach(model => {
+            model.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+        });
+    }
+
+    updateDifficulty() {
+        const newDifficulty = Math.floor(this.distance / Config.DIFFICULTY_INTERVAL) + 1;
+        
+        if (newDifficulty > this.difficultyLevel) {
+            this.difficultyLevel = newDifficulty;
+            
+            const speedIncrease = 2 * this.difficultyLevel;
+            this.gameSpeed = Math.min(
+                Config.GAME_START_SPEED + speedIncrease, 
+                Config.GAME_MAX_SPEED
+            );
+            
+            this.obstacleManager.baseSpawnRate = Math.max(
+                0.5, 
+                2 - (this.difficultyLevel * 0.3)
+            );
+            
+            console.log(`📈 ¡Dificultad Nivel ${this.difficultyLevel}! Velocidad: ${this.gameSpeed.toFixed(1)}`);
+        }
     }
 
     updatePowerUps(deltaTime) {
@@ -332,19 +903,37 @@ export class Game {
                     timerElement.textContent = `${Math.max(0, powerUp.timer).toFixed(1)}s`;
                 }
                 
-                // Efecto de parpadeo cuando queda poco tiempo
+                // EFECTO DE PARPADEO CUANDO QUEDA POCO TIEMPO
                 if (powerUp.timer < 3.0) {
                     const blink = (Math.sin(Date.now() * 0.02) + 1) * 0.3 + 0.4;
                     indicator.style.opacity = blink;
                 }
                 
-                // Desactivar cuando timer llega a 0
+                // DESACTIVAR CUANDO TIMER LLEGA A 0
                 if (powerUp.timer <= 0) {
-                    console.log(`⏰ Power-up ${type} terminó - Desactivando`);
                     this.deactivatePowerUp(type);
                 }
             }
         }
+    }
+
+    activatePowerUp(type) {
+        console.log(`🎯 ACTIVANDO POWER-UP: ${type}`);
+        
+        const duration = Config.POWERUP_DURATION[type];
+        
+        this.activePowerUps[type].active = true;
+        this.activePowerUps[type].timer = duration;
+        
+        this.powerUpIndicators[type].style.display = 'block';
+        this.powerUpIndicators[type].style.background = type === 'magnet' 
+            ? 'rgba(255, 0, 0, 0.7)' 
+            : 'rgba(255, 215, 0, 0.7)';
+        
+        this.playPowerUpSound();
+        this.showPowerUpNotification(type);
+        
+        console.log(`✅ Power-up ACTIVADO: ${type} por ${duration}s`);
     }
 
     deactivatePowerUp(type) {
@@ -357,13 +946,6 @@ export class Game {
         this.powerUpIndicators[type].style.opacity = '1';
         
         console.log(`❌ Power-up DESACTIVADO: ${type}`);
-    }
-
-    debugPowerUps() {
-        console.log("🔍 DEBUG Power-ups:");
-        for (const [type, powerUp] of Object.entries(this.activePowerUps)) {
-            console.log(`   ${type}: active=${powerUp.active}, timer=${powerUp.timer.toFixed(1)}s`);
-        }
     }
 
     showPowerUpNotification(type) {
@@ -392,6 +974,7 @@ export class Game {
             text-align: center;
             border: 3px solid white;
             box-shadow: 0 0 30px ${info.color};
+            backdrop-filter: blur(10px);
         `;
         
         notification.innerHTML = `
@@ -425,442 +1008,6 @@ export class Game {
         }, 3000);
     }
 
-    playPowerUpSound() {
-        if (this.powerUpSound) {
-            this.powerUpSound.stop();
-            this.powerUpSound.play();
-        }
-    }
-
-    playBackgroundMusic() {
-        if (this.backgroundMusic && !this.isMusicPlaying) {
-            this.backgroundMusic.play();
-            this.isMusicPlaying = true;
-            console.log("Música de fondo iniciada");
-        }
-    }
-
-    playCoinSound() {
-        if (this.coinSound) {
-            this.coinSound.stop();
-            this.coinSound.play();
-        }
-    }
-
-    pauseBackgroundMusic() {
-        if (this.backgroundMusic && this.isMusicPlaying) {
-            this.backgroundMusic.pause();
-            this.isMusicPlaying = false;
-            console.log("Música de fondo pausada");
-        }
-    }
-
-    stopBackgroundMusic() {
-        if (this.backgroundMusic) {
-            this.backgroundMusic.stop();
-            this.isMusicPlaying = false;
-            console.log("Música de fondo detenida");
-        }
-    }
-
-    resetToMainMenu() {
-        console.log("🔄 Reiniciando a menú principal...");
-        
-        this.stopBackgroundMusic();
-        
-        this.isGameStarted = false;
-        this.isGameOver = false;
-        this.isPaused = false;
-        this.score = 0;
-        this.distance = 0;
-        this.gameSpeed = Config.GAME_START_SPEED;
-        this.difficultyLevel = 1;
-        
-        for (const type in this.activePowerUps) {
-            this.activePowerUps[type].active = false;
-            this.activePowerUps[type].timer = 0;
-            if (this.powerUpIndicators[type]) {
-                this.powerUpIndicators[type].style.display = 'none';
-                this.powerUpIndicators[type].style.opacity = '1';
-            }
-        }
-        
-        if (this.obstacleManager) {
-            this.obstacleManager.reset();
-        }
-        
-        if (this.player) this.player.reset();
-        if (this.world) this.world.reset();
-        
-        this.ui.uiContainer.style.display = 'none';
-        this.ui.gameOver.style.display = 'none';
-        document.getElementById('pause-button').style.display = 'none';
-        document.getElementById('pause-menu').style.display = 'none';
-        
-        this.ui.modalOverlay.style.display = 'flex';
-        this.ui.rulesModal.style.display = 'block';
-
-        const introMusic = document.getElementById('intro-music');
-        if (introMusic) {
-            introMusic.currentTime = 0;
-            if (!introMusic.muted) {
-                introMusic.play().catch(e => console.log('Error al reanudar música:', e));
-            }
-        }
-        
-        console.log("✅ Menú principal cargado correctamente");
-    }
-
-    startGame() {
-        this.clock.start();
-        console.log("🚀 INICIANDO JUEGO - VR Primera Persona");
-        
-        this.checkInitialCollisions();
-        
-        this.ui.modalOverlay.style.display = 'none';
-        this.ui.rulesModal.style.display = 'none';
-        this.ui.uiContainer.style.display = 'block';
-
-        this.isGameStarted = true;
-        this.isGameOver = false;
-        
-        this.playBackgroundMusic();
-        this.resetGameLogic();
-        this.animate();
-    }
-
-    checkInitialCollisions() {
-        console.log("🔍 VERIFICANDO COLISIONES INICIALES...");
-        
-        const playerBox = this.player.getBoundingBox();
-        console.log("📍 Posición inicial del jugador:", {
-            x: this.player.group.position.x.toFixed(2),
-            y: this.player.group.position.y.toFixed(2), 
-            z: this.player.group.position.z.toFixed(2)
-        });
-
-        console.log(`🎯 Obstáculos al inicio: ${this.obstacleManager.obstacles.length}`);
-        this.obstacleManager.obstacles.forEach((obstacle, i) => {
-            const obstacleBox = obstacle.getBoundingBox();
-            console.log(`   Obstáculo ${i}:`, {
-                type: obstacle.type,
-                position: {
-                    x: obstacle.mesh.position.x.toFixed(2),
-                    y: obstacle.mesh.position.y.toFixed(2),
-                    z: obstacle.mesh.position.z.toFixed(2)
-                },
-                colisiona: playerBox.intersectsBox(obstacleBox)
-            });
-        });
-
-        console.log(`⚡ Power-ups al inicio: ${this.obstacleManager.powerUps.length}`);
-        this.obstacleManager.powerUps.forEach((powerUp, i) => {
-            const powerUpBox = powerUp.getBoundingBox();
-            console.log(`   Power-up ${i}:`, {
-                type: powerUp.powerUpType,
-                position: {
-                    x: powerUp.mesh.position.x.toFixed(2),
-                    y: powerUp.mesh.position.y.toFixed(2),
-                    z: powerUp.mesh.position.z.toFixed(2)
-                },
-                colisiona: playerBox.intersectsBox(powerUpBox)
-            });
-        });
-    }
-
-    resetGameLogic() {
-        console.log("🔄 Reseteando juego...");
-        
-        this.score = 0;
-        this.distance = 0;
-        this.gameSpeed = Config.GAME_START_SPEED;
-        this.difficultyLevel = 1;
-
-        for (const type in this.activePowerUps) {
-            this.activePowerUps[type].active = false;
-            this.activePowerUps[type].timer = 0;
-            this.powerUpIndicators[type].style.display = 'none';
-        }
-
-        this.ui.score.textContent = `Puntos: 0`;
-        this.ui.distance.textContent = `Distancia: 0m`;
-
-        if (this.obstacleManager) {
-            this.obstacleManager.reset();
-        }
-        
-        if (this.player) this.player.reset();
-        if (this.world) this.world.reset();
-
-        console.log("✅ Juego reiniciado - Listo para empezar");
-    }
-
-    restartGame() {
-        this.clock.start();
-        console.log("Reiniciando el juego...");
-        
-        this.ui.gameOver.style.display = 'none';
-        this.isGameOver = false;
-        
-        this.playBackgroundMusic();
-        this.resetGameLogic();
-        this.animate();
-    }
-
-    setupLights() {
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        this.scene.add(ambientLight);
-
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-        dirLight.position.set(5, 10, 7);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 1024;
-        dirLight.shadow.mapSize.height = 1024;
-        dirLight.shadow.camera.near = 0.1;
-        dirLight.shadow.camera.far = 50;
-        this.scene.add(dirLight);
-    }
-
-    loadEnvironment(hdrPath) {
-        const rgbeLoader = new RGBELoader();
-        rgbeLoader.load(hdrPath, (texture) => {
-            texture.mapping = THREE.EquirectangularReflectionMapping;
-            this.scene.background = texture;
-            this.scene.environment = texture;
-            console.log("Fondo HDR cargado.");
-        }, undefined, (err) => {
-            console.warn("No se pudo cargar el fondo HDR. Usando fondo azul por defecto.", err);
-            this.scene.background = new THREE.Color(0x87CEEB);
-        });
-    }
-
-    updateDifficulty() {
-        const newDifficulty = Math.floor(this.distance / Config.DIFFICULTY_INTERVAL) + 1;
-        
-        if (newDifficulty > this.difficultyLevel) {
-            this.difficultyLevel = newDifficulty;
-            
-            const speedIncrease = 2 * this.difficultyLevel;
-            this.gameSpeed = Math.min(
-                Config.GAME_START_SPEED + speedIncrease, 
-                Config.GAME_MAX_SPEED
-            );
-            
-            this.obstacleManager.baseSpawnRate = Math.max(
-                0.5, 
-                2 - (this.difficultyLevel * 0.3)
-            );
-            
-            console.log(`¡Dificultad Nivel ${this.difficultyLevel}! Velocidad: ${this.gameSpeed.toFixed(1)}`);
-        }
-    }
-
-    preloadAssets() {
-        console.log("Precargando assets...");
-        const fbxLoader = new FBXLoader();
-        const textureLoader = new THREE.TextureLoader();
-        const totalAssets = 15; 
-        let loadedCount = 0;
-
-        const updateProgress = () => {
-            loadedCount++;
-            const progress = (loadedCount / totalAssets) * 100;
-            this.ui.loadingBar.style.width = `${progress}%`;
-            this.ui.loadingText.textContent = `${Math.round(progress)}%`;
-            console.log(`Progreso de carga: ${progress}%`);
-        };
-
-        const loadPromise = (path) => {
-            return new Promise((resolve, reject) => {
-                fbxLoader.load(path, (obj) => {
-                    updateProgress();
-                    resolve(obj);
-                }, undefined, (err) => {
-                    console.error(`Error cargando ${path}`, err);
-                    reject(err);
-                });
-            });
-        };
-
-        const loadTexturePromise = (path) => {
-            return new Promise((resolve, reject) => {
-                textureLoader.load(path, (texture) => {
-                    texture.wrapS = THREE.RepeatWrapping;
-                    texture.wrapT = THREE.RepeatWrapping;
-                    resolve(texture);
-                }, undefined, (err) => {
-                    console.error(`Error cargando textura ${path}`, err);
-                    reject(err);
-                });
-            });
-        };
-
-        return new Promise(async (resolve, reject) => {
-            try {
-                const assetPaths = {
-                    coin: 'Recursos/Low Poly Coin.fbx',
-                    barrier: 'Recursos/concrete_road_barrier4k.fbx',
-                    car: 'Recursos/covered_car4k.fbx',
-                    rock: 'Recursos/moon_rock_4k.fbx',
-                    barrel: 'Recursos/Barrel.fbx',
-                    dartboard: 'Recursos/dartboard_4k.fbx', 
-                    pipeWrench: 'Recursos/pipe_wrench_4k.fbx', 
-                    playerModel: 'Recursos/character.fbx',
-                    animRun: 'Recursos/Fast Run.fbx',
-                    animJump: 'Recursos/Jump.fbx',
-                    animDie: 'Recursos/Death.fbx',
-                    animRoll: 'Recursos/Sprinting Forward Roll.fbx',
-                    animLeft: 'Recursos/Left.fbx',   
-                    animRight: 'Recursos/Right.fbx',
-                    zombieModel: 'Recursos/Zombie Walk1.fbx'
-                };
-
-                console.log("Cargando texturas...");
-                const [
-                    carTexture,
-                    barrierDiffTexture,
-                    barrierDispTexture,
-                    rockDiffTexture,
-                    rockDispTexture,
-                    barrelTexture, 
-                    dartboardTexture, 
-                    pipeWrenchTexture 
-                ] = await Promise.all([
-                    loadTexturePromise('Recursos/covered_car_diff_4k.jpg'),
-                    loadTexturePromise('Recursos/concrete_road_barrier_diff_4k.jpg'),
-                    loadTexturePromise('Recursos/concrete_road_barrier_disp_4k.png'),
-                    loadTexturePromise('Recursos/moon_rock_03_diff_4k.jpg'),
-                    loadTexturePromise('Recursos/moon_rock_03_disp_4k.png'),
-                    loadTexturePromise('Recursos/Barrel_01.png'), 
-                    loadTexturePromise('Recursos/dartboard_diff_4k.jpg'), 
-                    loadTexturePromise('Recursos/pipe_wrench_diff_4k.jpg') 
-                ]);
-
-                const [
-                    coin, 
-                    barrier, 
-                    car, 
-                    rock,
-                    barrel, 
-                    dartboard,
-                    pipeWrench, 
-                    playerModel,
-                    animRun,
-                    animJump,
-                    animDie,
-                    animRoll,
-                    animLeft,
-                    animRight,
-                    zombieModel
-                    
-                ] = await Promise.all([
-                    loadPromise(assetPaths.coin),
-                    loadPromise(assetPaths.barrier),
-                    loadPromise(assetPaths.car),
-                    loadPromise(assetPaths.rock),
-                    loadPromise(assetPaths.barrel),
-                    loadPromise(assetPaths.dartboard), 
-                    loadPromise(assetPaths.pipeWrench), 
-                    loadPromise(assetPaths.playerModel),
-                    loadPromise(assetPaths.animRun),
-                    loadPromise(assetPaths.animJump),
-                    loadPromise(assetPaths.animDie),
-                    loadPromise(assetPaths.animRoll),
-                    loadPromise(assetPaths.animLeft),
-                    loadPromise(assetPaths.animRight),
-                    loadPromise(assetPaths.zombieModel)
-                ]);
-
-                car.traverse(child => {
-                    if (child.isMesh && child.material) {
-                        child.material.map = carTexture;
-                        child.material.needsUpdate = true;
-                    }
-                });
-
-                barrier.traverse(child => {
-                    if (child.isMesh && child.material) {
-                        child.material.map = barrierDiffTexture;
-                        child.material.displacementMap = barrierDispTexture;
-                        child.material.displacementScale = 0.1;
-                        child.material.needsUpdate = true;
-                    }
-                });
-
-                rock.traverse(child => {
-                    if (child.isMesh && child.material) {
-                        child.material.map = rockDiffTexture;
-                        child.material.displacementMap = rockDispTexture;
-                        child.material.displacementScale = 0.05;
-                        child.material.needsUpdate = true;
-                    }
-                });
-
-                barrel.traverse(child => {
-                    if (child.isMesh && child.material) {
-                        child.material.map = barrelTexture;
-                        child.material.needsUpdate = true;
-                    }
-                });
-
-                dartboard.traverse(child => {
-                    if (child.isMesh && child.material) {
-                        child.material.map = dartboardTexture;
-                        child.material.needsUpdate = true;
-                    }
-                });
-
-                pipeWrench.traverse(child => {
-                    if (child.isMesh && child.material) {
-                        child.material.map = pipeWrenchTexture;
-                        child.material.needsUpdate = true;
-                    }
-                });
-
-                coin.scale.set(0.005, 0.005, 0.005);           
-                barrier.scale.set(0.01, 0.01, 0.01);           
-                car.scale.set(0.015, 0.015, 0.015);            
-                barrel.scale.set(0.02, 0.02, 0.02);            
-                dartboard.scale.set(0.03,0.03,0.03);    
-                pipeWrench.scale.set(0.03,0.03,0.03); 
-                zombieModel.scale.set(0.011, 0.011, 0.011);
-
-                [coin, barrier, car, rock, barrel, dartboard, pipeWrench, playerModel].forEach(model => {
-                    model.traverse(child => {
-                        if (child.isMesh) {
-                            child.castShadow = true;
-                            child.receiveShadow = true;
-                        }
-                    });
-                });
-
-                console.log("✅ Todos los assets cargados y configurados");
-
-                resolve({
-                    coin: coin,
-                    playerModel: playerModel,
-                    barrier: barrier,
-                    car: car,
-                    rock: rock,
-                    barrel: barrel, 
-                    dartboard: dartboard, 
-                    pipeWrench: pipeWrench, 
-                    obstacleBarriers: [barrier, car, rock, barrel], 
-                    animRun: animRun,
-                    animJump: animJump,
-                    animDie: animDie,
-                    animRoll: animRoll,
-                    animLeft: animLeft,
-                    animRight: animRight,
-                    zombieModel: zombieModel
-                });
-
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
     checkCollisions() {
         if (this.isGameOver) return;
 
@@ -869,33 +1016,27 @@ export class Game {
 
         this.frameCount++;
 
+        // DEBUG CADA 120 FRAMES
         if (this.collisionDebugEnabled && this.frameCount % 120 === 0) {
             console.log(`🔄 Frame ${this.frameCount} - Distancia: ${this.distance.toFixed(0)}m`);
             console.log(`📍 Jugador: X=${playerPosition.x.toFixed(2)}, Z=${playerPosition.z.toFixed(2)}`);
             console.log(`🎯 Obstáculos: ${this.obstacleManager.obstacles.length}`);
             console.log(`⚡ Power-ups: ${this.obstacleManager.powerUps.length}`);
-            this.debugPowerUps(); 
         }
 
+        // VERIFICAR COLISIONES CON OBSTÁCULOS
         for (let i = 0; i < this.obstacleManager.obstacles.length; i++) {
             const obstacle = this.obstacleManager.obstacles[i];
             const obstacleBox = obstacle.getBoundingBox();
             
             if (playerBox.intersectsBox(obstacleBox)) {
                 console.log("🚨 ¡COLISIÓN CON OBSTÁCULO! Game Over");
-                console.log(`📍 Obstáculo ${i}:`, {
-                    type: obstacle.type,
-                    position: {
-                        x: obstacle.mesh.position.x.toFixed(2),
-                        y: obstacle.mesh.position.y.toFixed(2),
-                        z: obstacle.mesh.position.z.toFixed(2)
-                    }
-                });
                 this.gameOver("COLISIÓN CON OBSTÁCULO");
                 return;
             }
         }
 
+        // VERIFICAR COLISIONES CON MONEDAS
         for (let i = this.obstacleManager.coins.length - 1; i >= 0; i--) {
             const coin = this.obstacleManager.coins[i];
             const coinBox = coin.getBoundingBox();
@@ -910,25 +1051,21 @@ export class Game {
                 }
                 
                 this.score += points;
+                this.coinsCollected++;
                 this.ui.score.textContent = `Puntos: ${this.score}`;
                 this.playCoinSound();
             }
         }
 
+        // VERIFICAR COLISIONES CON POWER-UPS
         for (let i = this.obstacleManager.powerUps.length - 1; i >= 0; i--) {
             const powerUp = this.obstacleManager.powerUps[i];
             const powerUpBox = powerUp.getBoundingBox();
             
             if (playerBox.intersectsBox(powerUpBox)) {
                 console.log(`⚡ ¡COLISIÓN CON POWER-UP! Tipo: ${powerUp.powerUpType}`);
-                console.log(`📍 Posición power-up:`, {
-                    x: powerUp.mesh.position.x.toFixed(2),
-                    y: powerUp.mesh.position.y.toFixed(2), 
-                    z: powerUp.mesh.position.z.toFixed(2)
-                });
                 
                 const powerUpType = powerUp.powerUpType;
-                
                 this.obstacleManager.collectPowerUp(powerUp);
                 
                 if (powerUpType && (powerUpType === 'magnet' || powerUpType === 'double')) {
@@ -946,10 +1083,11 @@ export class Game {
         if (this.isGameOver) return;
 
         console.log("🛑 ================================");
-        console.log("🛑 GAME OVER - INICIANDO SECUENCIA");
+        console.log("🛑 GAME OVER");
         console.log(`🛑 Razón: ${reason}`);
         console.log(`🛑 Distancia: ${this.distance.toFixed(0)}m`);
         console.log(`🛑 Puntuación: ${this.score}`);
+        console.log(`🛑 Monedas: ${this.coinsCollected}`);
         console.log("🛑 ================================");
 
         this.isGameOver = true;
@@ -959,28 +1097,78 @@ export class Game {
             this.player.die();
         }
 
+        // ACTUALIZAR ESTADÍSTICAS FINALES
+        this.updateFinalStats();
+
+        // MOSTRAR MENÚ DE GAME OVER SEGÚN MODO
+        setTimeout(() => {
+            if (this.isVRMode && this.vrControls) {
+                this.vrControls.showGameOverMenu();
+            } else {
+                this.ui.gameOver.style.display = 'block';
+            }
+        }, 2000);
+
+        // LISTENER PARA ANIMACIÓN DE MUERTE
         if (this.player && this.player.mixer) {
             const dieAction = this.player.actions.die;
 
             const onDieAnimationFinished = (e) => {
                 if (e.action === dieAction) {
-                    console.log("Animación 'die' terminada. Mostrando menú de Game Over.");
-
-                    document.getElementById('final-score').textContent = this.score;
-                    document.getElementById('final-distance').textContent = Math.floor(this.distance) + 'm';
-                    document.getElementById('final-coins').textContent = Math.floor(this.score / 10);
-                    document.getElementById('final-time').textContent = Math.floor(this.distance / this.gameSpeed) + 's';
-
-                    this.ui.gameOver.style.display = 'block';
-
+                    console.log("💀 Animación de muerte terminada");
                     this.player.mixer.removeEventListener('finished', onDieAnimationFinished);
                 }
             };
 
             this.player.mixer.addEventListener('finished', onDieAnimationFinished);
+        }
+    }
 
-        } else {
-            this.ui.gameOver.style.display = 'block';
+    updateFinalStats() {
+        if (this.ui.finalScore) this.ui.finalScore.textContent = this.score;
+        if (this.ui.finalDistance) this.ui.finalDistance.textContent = Math.floor(this.distance) + 'm';
+        if (this.ui.finalCoins) this.ui.finalCoins.textContent = this.coinsCollected;
+        if (this.ui.finalTime) {
+            const timeInSeconds = Math.floor(this.distance / this.gameSpeed);
+            this.ui.finalTime.textContent = timeInSeconds + 's';
+        }
+    }
+
+    playBackgroundMusic() {
+        if (this.backgroundMusic && !this.isMusicPlaying) {
+            this.backgroundMusic.play();
+            this.isMusicPlaying = true;
+            console.log("🎵 Música de fondo iniciada");
+        }
+    }
+
+    playCoinSound() {
+        if (this.coinSound) {
+            this.coinSound.stop();
+            this.coinSound.play();
+        }
+    }
+
+    playPowerUpSound() {
+        if (this.powerUpSound) {
+            this.powerUpSound.stop();
+            this.powerUpSound.play();
+        }
+    }
+
+    pauseBackgroundMusic() {
+        if (this.backgroundMusic && this.isMusicPlaying) {
+            this.backgroundMusic.pause();
+            this.isMusicPlaying = false;
+            console.log("⏸️ Música de fondo pausada");
+        }
+    }
+
+    stopBackgroundMusic() {
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+            this.isMusicPlaying = false;
+            console.log("🛑 Música de fondo detenida");
         }
     }
 
@@ -1003,7 +1191,6 @@ export class Game {
         }
     }
 
-    // NUEVO: Render MEJORADO para VR primera persona
     render() {
         if (this.isPaused) {
             return; 
@@ -1011,20 +1198,21 @@ export class Game {
 
         const delta = this.clock.getDelta();
 
-        // NUEVO: Actualizar controles VR con contenedor de cámara
+        // ACTUALIZAR CONTROLES VR
         if (this.vrControls && this.isVRMode) {
             this.vrControls.update(delta);
         }
 
+        // ACTUALIZAR JUGADOR
         if (this.player) {
             this.player.update(delta);
             
-            // NUEVO: En VR primera persona, la cámara SIGUE al jugador
+            // EN VR PRIMERA PERSONA, LA CÁMARA SIGUE AL JUGADOR
             if (this.isVRMode) {
                 this.cameraContainer.position.x = this.player.group.position.x;
                 this.cameraContainer.position.z = this.player.group.position.z;
                 
-                // Ajustar altura durante saltos
+                // AJUSTAR ALTURA DURANTE SALTOS
                 if (this.player.state === Config.PLAYER_STATE.JUMPING) {
                     this.cameraContainer.position.y = Config.VR_SETTINGS.PLAYER_HEIGHT + this.player.group.position.y;
                 } else {
@@ -1033,6 +1221,7 @@ export class Game {
             }
         }
 
+        // SI ES GAME OVER, SOLO RENDERIZAR
         if (this.isGameOver) {
             if (this.world) {
                 this.world.zombieCatch(delta);
@@ -1043,8 +1232,10 @@ export class Game {
 
         const playerPosition = this.player.group.position;
 
+        // ACTUALIZAR MUNDO
         this.world.update(delta, this.gameSpeed, playerPosition);
         
+        // ACTUALIZAR OBSTÁCULOS
         this.obstacleManager.update(
             delta, 
             this.gameSpeed, 
@@ -1053,20 +1244,60 @@ export class Game {
             this.activePowerUps
         );
 
-        // NUEVO: En modo normal, cámara sigue al jugador en 3ra persona
+        // EN MODO NORMAL, CÁMARA SIGUE AL JUGADOR EN 3RA PERSONA
         if (!this.isVRMode) {
             this.cameraContainer.position.z = playerPosition.z + Config.CAMERA_START_Z;
             this.cameraContainer.position.x = playerPosition.x;
         }
 
+        // ACTUALIZAR DISTANCIA Y PUNTUACIÓN
         this.distance += this.gameSpeed * delta;
-        this.ui.distance.textContent = `Distancia: ${this.distance.toFixed(0)}m`;
         
+        // ACTUALIZAR UI CADA 0.1 SEGUNDOS (PARA MEJOR RENDIMIENTO)
+        this.lastDistanceUpdate += delta;
+        if (this.lastDistanceUpdate >= 0.1) {
+            this.ui.distance.textContent = `Distancia: ${this.distance.toFixed(0)}m`;
+            this.lastDistanceUpdate = 0;
+        }
+        
+        // ACTUALIZAR SISTEMAS
         this.updatePowerUps(delta);
         this.updateDifficulty();
         
+        // VERIFICAR COLISIONES
         this.checkCollisions();
 
+        // RENDERIZAR ESCENA
         this.renderer.render(this.scene, this.camera);
     }
+
+    // MÉTODO PARA DEBUG
+    debugInfo() {
+        return {
+            gameState: {
+                started: this.isGameStarted,
+                paused: this.isPaused,
+                gameOver: this.isGameOver,
+                vrMode: this.isVRMode
+            },
+            stats: {
+                score: this.score,
+                distance: this.distance.toFixed(0),
+                coins: this.coinsCollected,
+                speed: this.gameSpeed.toFixed(1),
+                difficulty: this.difficultyLevel
+            },
+            player: this.player ? this.player.debugInfo() : 'No inicializado',
+            powerUps: this.activePowerUps
+        };
+    }
 }
+
+// HACER GLOBAL PARA DEBUG
+window.gameDebug = function() {
+    if (window.game) {
+        console.log("🎮 DEBUG INFO:", window.game.debugInfo());
+    } else {
+        console.log("❌ Game no está inicializado");
+    }
+};

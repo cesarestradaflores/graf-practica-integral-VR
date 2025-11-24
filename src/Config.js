@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------
-// --- Config.js (CONFIGURACIÓN VR PRIMERA PERSONA)
+// --- Config.js (CONFIGURACIÓN UI VR + CONTROLES MEJORADOS)
 // -----------------------------------------------------------------
 
 export const Config = {
@@ -59,11 +59,13 @@ export const Config = {
     SPAWN_Z: -150,
     DESPAWN_Z: 20,
 
-    // NUEVO: Configuración VR PRIMERA PERSONA MEJORADA
+    // NUEVO: Configuración VR MEJORADA con UI
     VR_SETTINGS: {
         PLAYER_HEIGHT: 1.6,
-        GAZE_THRESHOLD: 0.3,
-        GAZE_DURATION: 0.5,
-        CAMERA_SMOOTHING: 0.1
+        GAZE_THRESHOLD: 30, // AUMENTADO de 17° a 30°
+        GAZE_DURATION: 0.8, // AUMENTADO para mayor precisión
+        CAMERA_SMOOTHING: 0.1,
+        UI_DISTANCE: 1.5, // metros
+        UI_FOLLOW_SPEED: 0.1
     }
 };
